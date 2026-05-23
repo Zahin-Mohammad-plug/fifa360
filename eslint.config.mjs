@@ -5,16 +5,9 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  {
-    rules: {
-      // Next 16 / React 19 ship this rule on by default. The template's
-      // patterns (localStorage hydration, async fetch effects, client-only
-      // mount flags) are well-established and don't actually cause render
-      // loops here, so we downgrade it to a warning project-wide.
-      "react-hooks/set-state-in-effect": "off",
-    },
-  },
+  // Override default ignores of eslint-config-next.
   globalIgnores([
+    // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
     "build/**",

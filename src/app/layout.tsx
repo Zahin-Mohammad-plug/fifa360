@@ -1,26 +1,51 @@
 import type { Metadata, Viewport } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { AppShell } from "./AppShell";
+import { TopNav } from "@/components/TopNav";
+import { BottomNav } from "@/components/BottomNav";
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["300", "400", "500", "600", "700", "800"],
+  variable: "--font-sans",
+  display: "swap",
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
-  title: "FIFA 360 — Matchday Companion",
+  title: "Matchday Concierge – FIFA World Cup 2026",
   description:
-    "Find venues, plan routes, get live updates, and book your spot for every FIFA World Cup 2026 match.",
+    "Find the best supporter venues, plan your route, get live scores and real-time alerts for every FIFA World Cup 2026 match.",
   manifest: "/manifest.json",
   icons: { apple: "/icon-192.png" },
+  openGraph: {
+    title: "Matchday Concierge – FIFA World Cup 2026",
+    description: "Find venues, plan routes, live scores, AI concierge for World Cup 2026.",
+    type: "website",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#030712",
+  themeColor: "#070c04",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="antialiased">
-        <AppShell>{children}</AppShell>
+        <TopNav />
+        <div className="main-content">
+          {children}
+        </div>
+        <BottomNav />
       </body>
     </html>
   );
