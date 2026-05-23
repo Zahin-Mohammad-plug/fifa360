@@ -68,9 +68,10 @@ html, body {
 }
 
 .page-container {
-  max-width: 760px;
+  width: 100%;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 0 1.125rem;
+  padding: 0 clamp(1rem, 2.2vw, 1.5rem);
 }
 
 /* ─── Liquid Glass System ────────────────────────────────────────────────── */

@@ -6,6 +6,7 @@ import { MATCHES } from "@/data/matches";
 import { getVenuesForMatch } from "@/data/venues";
 import { TRANSIT_PLANS } from "@/data/transit";
 import { Venue } from "@/types";
+import { ArrivalMap } from "@/components/ArrivalMap";
 import {
   Navigation, Train, RefreshCw, Zap, ChevronDown, MapPin, Clock,
 } from "lucide-react";
@@ -26,17 +27,14 @@ export default function RoutePage() {
   const activeMatch = selectedMatch ?? MATCHES.find((m) => m.status === "live") ?? MATCHES[0];
   const venues      = getVenuesForMatch(activeMatch.id);
   const activeVenue: Venue | null = selectedVenue ?? venues[0] ?? null;
+  const getDepartureSeconds = (venue: Venue | null) => ((venue?.departureCountdown ?? 15) * 60) - 10;
 
   const [mode,        setMode]       = useState<RouteMode>("metro");
-  const [secs,        setSecs]       = useState<number>(0);
+  const [secs,        setSecs]       = useState<number>(() => getDepartureSeconds(activeVenue));
   const [updating,    setUpdating]   = useState(false);
   const [showPicker,  setShowPicker] = useState(false);
 
   const transitData = activeVenue ? TRANSIT_PLANS[activeVenue.id] ?? null : null;
-
-  useEffect(() => {
-    if (activeVenue) setSecs((activeVenue.departureCountdown ?? 15) * 60 - 10);
-  }, [activeVenue]);
 
   useEffect(() => {
     const id = setInterval(() => setSecs((p) => (p <= 1 ? 15 * 60 : p - 1)), 1000);
@@ -57,6 +55,7 @@ export default function RoutePage() {
   const handleVenueSwitch = useCallback((v: Venue, e: React.MouseEvent) => {
     e.stopPropagation();
     setSelectedVenue(v);
+    setSecs(getDepartureSeconds(v));
     setShowPicker(false);
     setUpdating(true);
     setTimeout(() => setUpdating(false), 550);
@@ -68,7 +67,7 @@ export default function RoutePage() {
 
   return (
     <div className="page-enter pb-6">
-      <div className="page-container pt-5 space-y-4">
+      <div className="page-container pt-5 space-y-4 xl:space-y-5">
 
         {/* ══ Transit Header ══ */}
         <div
@@ -213,138 +212,75 @@ export default function RoutePage() {
           </div>
         </div>
 
-        {/* ══ SVG Map ══ */}
-        <div
-          className="relative w-full rounded-3xl overflow-hidden pitch-grid"
-          style={{ height: 268, background: "#070d05", border: "1px solid rgba(255,255,255,0.05)" }}
-        >
-          <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="rg" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%"   stopColor="#ccff00" stopOpacity="0.95" />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity="0.45" />
-              </linearGradient>
-              <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-                <feGaussianBlur stdDeviation="3.5" result="blur" />
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-              <filter id="glow-sm" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-              </filter>
-              <radialGradient id="originGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%"   stopColor="#ccff00" stopOpacity="0.35" />
-                <stop offset="100%" stopColor="#ccff00" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-
-            {/* Subtle grid */}
-            <path d="M0 70 L500 70 M0 140 L500 140 M0 210 L500 210"
-              stroke="rgba(255,255,255,0.025)" strokeWidth="1"/>
-            <path d="M60 0 L60 320 M155 0 L155 320 M250 0 L250 320 M345 0 L345 320"
-              stroke="rgba(255,255,255,0.025)" strokeWidth="1"/>
-
-            {/* Route shadow */}
-            <path d="M 55 230 L 130 170 L 222 170 L 285 108 L 328 108"
-              fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="10"
-              strokeLinecap="round" strokeLinejoin="round"/>
-
-            {/* Active route */}
-            <path d="M 55 230 L 130 170 L 222 170 L 285 108 L 328 108"
-              fill="none" stroke="url(#rg)" strokeWidth="3.5"
-              strokeLinecap="round" strokeLinejoin="round"
-              strokeDasharray="10 6" className="animate-dash" filter="url(#glow)" />
-
-            {/* Walking stub */}
-            <path d="M 328 108 L 360 108 L 360 66"
-              fill="none" stroke="#ccff00" strokeWidth="1.5"
-              strokeDasharray="4 4" strokeLinecap="round"/>
-
-            {/* Waypoint nodes */}
-            {[[130,170],[222,170],[285,108]].map(([cx,cy], i) => (
-              <g key={i}>
-                <circle cx={cx} cy={cy} r="5" fill="#16240e" stroke="rgba(204,255,0,0.45)" strokeWidth="1.5" filter="url(#glow-sm)"/>
-                <circle cx={cx} cy={cy} r="2" fill="#ccff00" opacity="0.7"/>
-              </g>
-            ))}
-
-            {/* Origin */}
-            <circle cx="55" cy="230" r="16" fill="url(#originGlow)"/>
-            <circle cx="55" cy="230" r="5.5" fill="#ccff00" filter="url(#glow-sm)"/>
-            <text x="55" y="254" fill="#ccff00" fontSize="8" fontFamily="JetBrains Mono,monospace"
-              textAnchor="middle" fontWeight="700" opacity="0.85">YOU</text>
-
-            {/* Destination */}
-            <circle cx="360" cy="66" r="14" fill="rgba(255,59,48,0.16)"/>
-            <circle cx="360" cy="66" r="6.5" fill="#ff3b30" filter="url(#glow-sm)"/>
-            <polygon points="360,61 365,71 355,71" fill="#fff" opacity="0.9"/>
-            <text x="360" y="48" fill="#f5f9f3" fontSize="8" fontFamily="Inter,sans-serif"
-              textAnchor="middle" fontWeight="700">
-              {activeVenue ? activeVenue.name.split(" ").slice(0,2).join(" ") : "Venue"}
-            </text>
-          </svg>
-
-          {/* Compass */}
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.12fr)_minmax(0,0.88fr)] xl:items-start">
+          {/* ══ Apple MapKit (with demo fallback) ══ */}
           <div
-            className="absolute top-3.5 left-3.5 flex items-center justify-center rounded-lg text-[9px] font-mono"
-            style={{
-              width: 30, height: 30,
-              background: "rgba(0,0,0,0.65)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              color: "#7a8a75",
-              backdropFilter: "blur(6px)",
-            }}
+            className="relative w-full rounded-3xl overflow-hidden"
+            style={{ height: "min(62vh, 560px)", minHeight: 300, background: "#070d05", border: "1px solid rgba(255,255,255,0.05)" }}
           >
-            N 🧭
-          </div>
+            <ArrivalMap venue={activeVenue} transportMode={mode} />
 
-          {/* Live score pill */}
-          {activeMatch.status === "live" && (
+            {/* Compass */}
             <div
-              className="absolute bottom-3.5 right-3.5 flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-mono"
+              className="absolute top-3.5 left-3.5 flex items-center justify-center rounded-lg text-[9px] font-mono"
               style={{
-                background: "rgba(5,9,3,0.92)",
-                border: "1px solid rgba(204,255,0,0.28)",
-                backdropFilter: "blur(10px)",
-                boxShadow: "0 0 14px rgba(204,255,0,0.1)",
+                width: 30, height: 30,
+                background: "rgba(0,0,0,0.65)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                color: "#7a8a75",
+                backdropFilter: "blur(6px)",
               }}
             >
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ background: "#ff3b30", animation: "live-pulse 1.4s infinite" }}/>
-              <span className="font-bold" style={{ color: "#f5f9f3" }}>
-                {activeMatch.homeShort} {activeMatch.scoreHome}–{activeMatch.scoreAway} {activeMatch.awayShort}
-              </span>
-              <span style={{ color: "#7a8a75" }}>{activeMatch.minute}′</span>
+              N 🧭
             </div>
-          )}
 
-          {/* Mode switcher */}
-          <div
-            className="absolute bottom-3.5 left-3.5 flex gap-1 p-1 rounded-xl"
-            style={{
-              background: "rgba(5,9,3,0.92)",
-              border: "1px solid rgba(255,255,255,0.07)",
-              backdropFilter: "blur(10px)",
-            }}
-          >
-            {(["metro", "rideshare"] as RouteMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleModeChange(m)}
-                className="text-[9px] font-mono font-bold uppercase py-1.5 px-2.5 rounded-lg transition-all cursor-pointer"
-                style={mode === m
-                  ? { background: "#ccff00", color: "#060b03", boxShadow: "0 2px 8px rgba(204,255,0,0.25)" }
-                  : { color: "#7a8a75" }
-                }
+            {/* Live score pill */}
+            {activeMatch.status === "live" && (
+              <div
+                className="absolute bottom-3.5 right-3.5 flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-mono"
+                style={{
+                  background: "rgba(5,9,3,0.92)",
+                  border: "1px solid rgba(204,255,0,0.28)",
+                  backdropFilter: "blur(10px)",
+                  boxShadow: "0 0 14px rgba(204,255,0,0.1)",
+                }}
               >
-                {m}
-              </button>
-            ))}
-          </div>
-        </div>
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: "#ff3b30", animation: "live-pulse 1.4s infinite" }}/>
+                <span className="font-bold" style={{ color: "#f5f9f3" }}>
+                  {activeMatch.homeShort} {activeMatch.scoreHome}–{activeMatch.scoreAway} {activeMatch.awayShort}
+                </span>
+                <span style={{ color: "#7a8a75" }}>{activeMatch.minute}′</span>
+              </div>
+            )}
 
-        {/* ══ Transit Steps ══ */}
-        <div>
+            {/* Mode switcher */}
+            <div
+              className="absolute bottom-3.5 left-3.5 flex gap-1 p-1 rounded-xl"
+              style={{
+                background: "rgba(5,9,3,0.92)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                backdropFilter: "blur(10px)",
+              }}
+            >
+              {(["metro", "rideshare"] as RouteMode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => handleModeChange(m)}
+                  className="text-[9px] font-mono font-bold uppercase py-1.5 px-2.5 rounded-lg transition-all cursor-pointer"
+                  style={mode === m
+                    ? { background: "#ccff00", color: "#060b03", boxShadow: "0 2px 8px rgba(204,255,0,0.25)" }
+                    : { color: "#7a8a75" }
+                  }
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* ══ Transit Steps ══ */}
+          <div className="xl:max-h-[min(62vh,560px)] xl:overflow-y-auto xl:pr-1">
           <div className="flex items-center justify-between mb-3">
             <span className="label-mono">Arrival Plan</span>
             <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: "#ccff00" }}>
@@ -441,7 +377,9 @@ export default function RoutePage() {
                 <button
                   onClick={() => {
                     const idx = venues.findIndex((v) => v.id === activeVenue.id);
-                    setSelectedVenue(venues[(idx + 1) % venues.length]);
+                    const nextVenue = venues[(idx + 1) % venues.length];
+                    setSelectedVenue(nextVenue);
+                    setSecs(getDepartureSeconds(nextVenue));
                   }}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-colors"
                   style={{
@@ -477,6 +415,7 @@ export default function RoutePage() {
               </p>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>
