@@ -1,0 +1,12 @@
+<svg width='192' height='192' viewBox='0 0 192 192' xmlns='http://www.w3.org/2000/svg'>
+  <defs>
+    <radialGradient id='bg' cx='40%' cy='35%'>
+      <stop offset='0%' stop-color='#0d1a35'/>
+      <stop offset='100%' stop-color='#070b14'/>
+    </radialGradient>
+  </defs>
+  <circle cx='96' cy='96' r='96' fill='url(#bg)'/>
+  <circle cx='96' cy='96' r='72' fill='none' stroke='rgba(6,214,245,0.3)' stroke-width='1.5'/>
+  <text x='96' y='120' font-size='80' text-anchor='middle' font-family='system-ui'>⚽</text>
+  <text x='96' y='175' font-size='14' text-anchor='middle' font-family='system-ui,sans-serif' fill='rgba(6,214,245,0.8)' font-weight='bold'>FIFA 360</text>
+</svg>
