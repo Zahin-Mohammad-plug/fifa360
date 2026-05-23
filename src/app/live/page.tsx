@@ -6,17 +6,32 @@ import { MATCHES, getNextMatch } from "@/data/matches";
 import { Match, MatchEvent } from "@/types";
 import {
   Radio, Trophy, Calendar, Sparkles, Plus, Play, Pause, RefreshCw,
-  AlertTriangle, AlertCircle,
+  AlertTriangle, AlertCircle, ChevronRight, Bell, BellRing, ArrowRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const SIMULATED_EVENTS: Omit<MatchEvent, "minute">[] = [
-  { type: "goal",   team: "Mexico",    player: "H. Lozano",    summary: "GOLAZO! Lozano equalizes with a flying header. It&apos;s level again!" },
-  { type: "yellow", team: "Argentina", player: "L. Messi",     summary: "Messi booked for dissent after disputing a throw-in call. Rare card." },
-  { type: "red",    team: "Mexico",    player: "J. Corona",    summary: "RED CARD! Corona receives a second yellow for a reckless foul. Mexico down to 10!" },
-  { type: "goal",   team: "Argentina", player: "L. Messi",     summary: "MESSI MAGIC! He curls a free-kick into the top corner. Argentina lead!" },
+  { type: "goal",   team: "Mexico",    player: "H. Lozano",       summary: "GOLAZO! Lozano equalizes with a flying header. It's level again!" },
+  { type: "yellow", team: "Argentina", player: "L. Messi",        summary: "Messi booked for dissent after disputing a throw-in call. Rare card." },
+  { type: "red",    team: "Mexico",    player: "J. Corona",       summary: "RED CARD! Corona receives a second yellow for a reckless foul. Mexico down to 10!" },
+  { type: "goal",   team: "Argentina", player: "L. Messi",        summary: "MESSI MAGIC! He curls a free-kick into the top corner. Argentina lead!" },
   { type: "sub",    team: "Argentina", player: "Di María → Mac Allister", summary: "Mac Allister on for Di María as Scaloni looks to protect the lead." },
 ];
+
+const EVENT_STYLES: Record<string, { border: string; bg: string; dot: string; icon: string; label: string }> = {
+  goal:     { border: "rgba(204,255,0,0.3)",   bg: "rgba(204,255,0,0.06)",   dot: "#ccff00",  icon: "⚽", label: "Goal" },
+  yellow:   { border: "rgba(251,191,36,0.3)",  bg: "rgba(251,191,36,0.06)",  dot: "#fbbf24",  icon: "🟨", label: "Yellow" },
+  red:      { border: "rgba(255,59,48,0.3)",   bg: "rgba(255,59,48,0.06)",   dot: "#ff3b30",  icon: "🟥", label: "Red Card" },
+  sub:      { border: "rgba(96,165,250,0.25)", bg: "rgba(96,165,250,0.05)",  dot: "#60a5fa",  icon: "🔄", label: "Sub" },
+  halftime: { border: "rgba(167,139,250,0.22)",bg: "rgba(167,139,250,0.04)", dot: "#a78bfa",  icon: "⏱", label: "Half Time" },
+  fulltime: { border: "rgba(255,255,255,0.12)",bg: "rgba(255,255,255,0.03)", dot: "#7a8a75",  icon: "🏁", label: "Full Time" },
+  kickoff:  { border: "rgba(204,255,0,0.15)",  bg: "rgba(204,255,0,0.03)",   dot: "#ccff00",  icon: "🏟", label: "Kick Off" },
+  var:      { border: "rgba(245,158,11,0.25)", bg: "rgba(245,158,11,0.05)",  dot: "#f59e0b",  icon: "📺", label: "VAR" },
+};
+
+function getEventStyle(type: string) {
+  return EVENT_STYLES[type] ?? EVENT_STYLES.kickoff;
+}
 
 export default function LivePage() {
   const { selectedMatch, setSelectedMatch } = useAppStore();
@@ -25,14 +40,14 @@ export default function LivePage() {
     selectedMatch ?? MATCHES.find((m) => m.status === "live") ?? MATCHES[0]
   );
   const [timeline, setTimeline] = useState<MatchEvent[]>([...(activeMatch.events ?? [])].reverse());
-  const [simMin,   setSimMin]   = useState<number>(parseInt(activeMatch.minute ?? "74") || 0);
-  const [playing,  setPlaying]  = useState(true);
+  const [simMin,     setSimMin]     = useState<number>(parseInt(activeMatch.minute ?? "74") || 0);
+  const [playing,    setPlaying]    = useState(true);
+  const [pushOptIn,  setPushOptIn]  = useState(false);
   const simRef = useRef<NodeJS.Timeout | null>(null);
 
-  const isLive = activeMatch.status === "live";
+  const isLive    = activeMatch.status === "live";
   const nextMatch = getNextMatch(activeMatch.id);
 
-  // Sync with store
   useEffect(() => {
     if (selectedMatch) {
       setActiveMatch(selectedMatch);
@@ -41,7 +56,6 @@ export default function LivePage() {
     }
   }, [selectedMatch]);
 
-  // Auto-advance minute
   useEffect(() => {
     if (playing && isLive) {
       simRef.current = setInterval(() => {
@@ -57,11 +71,10 @@ export default function LivePage() {
   }, [playing, isLive]);
 
   const triggerEvent = useCallback(() => {
-    const min = Math.min(simMin + Math.floor(Math.random() * 3) + 1, 90);
+    const min    = Math.min(simMin + Math.floor(Math.random() * 3) + 1, 90);
     setSimMin(min);
     const random = SIMULATED_EVENTS[Math.floor(Math.random() * SIMULATED_EVENTS.length)];
-    const newEvent: MatchEvent = { ...random, minute: String(min) };
-    setTimeline((prev) => [newEvent, ...prev]);
+    setTimeline((prev) => [{ ...random, minute: String(min) }, ...prev]);
   }, [simMin]);
 
   const reset = useCallback(() => {
@@ -78,37 +91,40 @@ export default function LivePage() {
     setPlaying(m.status === "live");
   }, [setSelectedMatch]);
 
-  const eventStyle = (e: MatchEvent) => {
-    if (e.type === "goal")     return { border: "rgba(204,255,0,0.3)",   bg: "rgba(204,255,0,0.06)", dot: "#ccff00",  icon: "⚽" };
-    if (e.type === "yellow")   return { border: "rgba(245,158,11,0.3)",  bg: "rgba(245,158,11,0.06)", dot: "#f59e0b", icon: "🟨" };
-    if (e.type === "red")      return { border: "rgba(255,59,48,0.3)",   bg: "rgba(255,59,48,0.06)",  dot: "#ff3b30", icon: "🟥" };
-    if (e.type === "sub")      return { border: "rgba(59,130,246,0.2)",  bg: "rgba(59,130,246,0.04)", dot: "#3b82f6", icon: "🔄" };
-    if (e.type === "halftime") return { border: "rgba(255,255,255,0.1)", bg: "rgba(255,255,255,0.02)", dot: "#83927d", icon: "⏱" };
-    if (e.type === "fulltime") return { border: "rgba(255,255,255,0.1)", bg: "rgba(255,255,255,0.02)", dot: "#83927d", icon: "🏁" };
-    return { border: "rgba(255,255,255,0.07)", bg: "rgba(255,255,255,0.02)", dot: "#83927d", icon: "▶" };
-  };
+  // Progress bar (0-90)
+  const progressPct = Math.min(100, Math.round((simMin / 90) * 100));
 
   return (
-    <div className="page-enter pb-4">
-      <div className="page-container pt-4 space-y-4">
+    <div className="page-enter pb-6">
+      <div className="page-container pt-5 space-y-4">
 
-        {/* ── Live Score Header ── */}
+        {/* ══ Live Score Header ══ */}
         <div
-          className="relative rounded-3xl p-6 overflow-hidden"
+          className="relative rounded-3xl overflow-hidden"
           style={{
-            background: "rgba(18,28,13,0.7)",
-            border: isLive ? "1px solid rgba(255,59,48,0.2)" : "1px solid rgba(204,255,0,0.1)",
-            boxShadow: isLive ? "0 0 40px rgba(255,59,48,0.06)" : "none",
+            padding: "22px 20px",
+            background: isLive
+              ? `linear-gradient(160deg, ${activeMatch.homeColor}22 0%, rgba(10,18,8,0.9) 45%, ${activeMatch.awayColor}18 100%), rgba(12,20,9,0.85)`
+              : "rgba(12,20,9,0.75)",
+            border: isLive ? "1px solid rgba(255,59,48,0.2)" : "1px solid rgba(255,255,255,0.065)",
+            boxShadow: isLive ? "0 0 60px rgba(255,59,48,0.05)" : "0 20px 40px rgba(0,0,0,0.3)",
           }}
         >
-          {/* Ambient glow */}
-          <div className="absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl pointer-events-none" style={{ background: isLive ? "rgba(255,59,48,0.07)" : "rgba(204,255,0,0.06)" }} />
+          {/* Inner glass highlight */}
+          <div
+            className="absolute top-0 left-0 right-0 h-px"
+            style={{ background: `linear-gradient(90deg, ${activeMatch.homeColor}44, rgba(255,255,255,0.06) 50%, ${activeMatch.awayColor}44)` }}
+          />
 
           {/* League + status */}
-          <div className="relative z-10 flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-5">
             <span
-              className="flex items-center gap-1.5 text-[10px] font-mono font-medium px-2.5 py-1 rounded-md uppercase"
-              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.06)", color: "#b8c5b4" }}
+              className="flex items-center gap-1.5 text-[10px] font-mono font-medium px-2.5 py-1 rounded-lg"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                color: "#b0bfac",
+              }}
             >
               <Trophy className="w-3.5 h-3.5" style={{ color: "#ccff00" }} />
               {activeMatch.league} · {activeMatch.tournament.replace("FIFA ", "")}
@@ -116,136 +132,206 @@ export default function LivePage() {
 
             {isLive ? (
               <span
-                className="neon-pulse-live flex items-center gap-1.5 px-2 py-1 rounded-full text-[9px] font-mono font-bold uppercase"
-                style={{ background: "rgba(255,59,48,0.18)", border: "1px solid rgba(255,59,48,0.3)", color: "#ff3b30" }}
+                className="neon-pulse-live flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-mono font-bold uppercase"
+                style={{
+                  background: "rgba(255,59,48,0.16)",
+                  border: "1px solid rgba(255,59,48,0.32)",
+                  color: "#ff5e54",
+                }}
               >
-                <Radio className="w-3.5 h-3.5 animate-live-dot" /> Live Feed
+                <Radio className="w-3.5 h-3.5 animate-live-dot" /> Live
               </span>
             ) : activeMatch.status === "finished" ? (
-              <span className="text-[9px] font-mono px-2 py-1 rounded-full" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#83927d" }}>
-                Full Time
-              </span>
+              <span className="chip chip-sage">Full Time</span>
             ) : (
-              <span className="text-[9px] font-mono px-2 py-1 rounded-full" style={{ background: "rgba(245,158,11,0.1)", border: "1px solid rgba(245,158,11,0.2)", color: "#f59e0b" }}>
-                Upcoming
-              </span>
+              <span className="chip chip-amber">⏰ {activeMatch.time}</span>
             )}
           </div>
 
-          {/* Scoreboard */}
-          <div className="relative z-10 flex items-center justify-between text-center">
+          {/* Score row */}
+          <div className="flex items-center justify-between">
             {/* Home */}
-            <div className="flex-1 flex flex-col items-center">
+            <div className="flex-1 flex flex-col items-center gap-2">
               <div
-                className="w-14 h-14 rounded-full flex items-center justify-center font-mono font-bold text-2xl border-2"
-                style={{ background: activeMatch.homeColor + "33", borderColor: activeMatch.homeColor + "55", color: activeMatch.homeColor }}
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+                style={{
+                  background: `${activeMatch.homeColor}22`,
+                  border: `1.5px solid ${activeMatch.homeColor}55`,
+                  boxShadow: `0 0 18px ${activeMatch.homeColor}22`,
+                }}
               >
                 {activeMatch.homeFlag}
               </div>
-              <h3 className="text-sm font-bold mt-2.5 tracking-tight" style={{ color: "#f9fbf8" }}>{activeMatch.homeTeam}</h3>
-              <span className="text-[10px] font-mono" style={{ color: "#83927d" }}>Home</span>
+              <div className="text-center">
+                <p className="text-[13px] font-bold tracking-tight" style={{ color: "#f5f9f3" }}>
+                  {activeMatch.homeTeam}
+                </p>
+                <p className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>Home</p>
+              </div>
             </div>
 
             {/* Score */}
-            <div className="px-3 flex flex-col items-center">
+            <div className="px-2 flex flex-col items-center gap-2">
               {activeMatch.status !== "upcoming" ? (
                 <>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <motion.span
                       key={activeMatch.scoreHome}
-                      animate={{ scale: [1.25, 1] }}
-                      className="text-5xl font-mono font-extrabold"
-                      style={{ color: "#f9fbf8", textShadow: isLive ? "0 0 20px rgba(204,255,0,0.3)" : "none" }}
+                      initial={{ scale: 1.4, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="text-[52px] font-mono font-extrabold leading-none"
+                      style={{
+                        color: "#f5f9f3",
+                        textShadow: isLive ? `0 0 24px ${activeMatch.homeColor}44` : "none",
+                      }}
                     >
                       {activeMatch.scoreHome}
                     </motion.span>
-                    <span className="text-2xl font-mono font-bold" style={{ color: "#ccff00" }}>:</span>
+                    <span
+                      className="text-2xl font-mono font-bold gradient-text-neon"
+                    >
+                      :
+                    </span>
                     <motion.span
                       key={activeMatch.scoreAway}
-                      animate={{ scale: [1.25, 1] }}
-                      className="text-5xl font-mono font-extrabold"
-                      style={{ color: "#f9fbf8", textShadow: isLive ? "0 0 20px rgba(204,255,0,0.3)" : "none" }}
+                      initial={{ scale: 1.4, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="text-[52px] font-mono font-extrabold leading-none"
+                      style={{
+                        color: "#f5f9f3",
+                        textShadow: isLive ? `0 0 24px ${activeMatch.awayColor}44` : "none",
+                      }}
                     >
                       {activeMatch.scoreAway}
                     </motion.span>
                   </div>
                   {isLive && (
                     <div
-                      className="mt-3 inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-bold"
-                      style={{ background: "rgba(7,12,4,0.9)", border: "1px solid rgba(204,255,0,0.25)", color: "#ccff00", boxShadow: "0 0 8px rgba(204,255,0,0.1)" }}
+                      className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold"
+                      style={{
+                        background: "rgba(5,9,3,0.9)",
+                        border: "1px solid rgba(204,255,0,0.28)",
+                        color: "#ccff00",
+                        boxShadow: "0 0 10px rgba(204,255,0,0.12)",
+                      }}
                     >
                       <span className="w-2 h-2 rounded-full animate-ping" style={{ background: "#ccff00" }} />
-                      MINUTE {simMin}&apos;
+                      {simMin}′
                     </div>
                   )}
                 </>
               ) : (
-                <div>
+                <div className="text-center space-y-1.5">
                   <div
-                    className="px-4 py-2 rounded-xl text-sm font-mono font-bold"
-                    style={{ background: "rgba(7,12,4,0.8)", border: "1px solid rgba(255,255,255,0.07)", color: "#f9fbf8" }}
+                    className="px-5 py-2.5 rounded-xl text-sm font-mono font-bold"
+                    style={{
+                      background: "rgba(5,9,3,0.8)",
+                      border: "1px solid rgba(255,255,255,0.07)",
+                      color: "#f5f9f3",
+                    }}
                   >
                     {activeMatch.time}
                   </div>
-                  <span className="block mt-2 text-[10px] font-mono" style={{ color: "#f59e0b" }}>Pre-game Hubs Open</span>
+                  <p className="text-[10px] font-mono" style={{ color: "#f59e0b" }}>Pre-match</p>
                 </div>
               )}
             </div>
 
             {/* Away */}
-            <div className="flex-1 flex flex-col items-center">
+            <div className="flex-1 flex flex-col items-center gap-2">
               <div
-                className="w-14 h-14 rounded-full flex items-center justify-center font-mono font-bold text-2xl border-2"
-                style={{ background: activeMatch.awayColor + "33", borderColor: activeMatch.awayColor + "55", color: activeMatch.awayColor }}
+                className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
+                style={{
+                  background: `${activeMatch.awayColor}22`,
+                  border: `1.5px solid ${activeMatch.awayColor}55`,
+                  boxShadow: `0 0 18px ${activeMatch.awayColor}22`,
+                }}
               >
                 {activeMatch.awayFlag}
               </div>
-              <h3 className="text-sm font-bold mt-2.5 tracking-tight" style={{ color: "#f9fbf8" }}>{activeMatch.awayTeam}</h3>
-              <span className="text-[10px] font-mono" style={{ color: "#83927d" }}>Away</span>
+              <div className="text-center">
+                <p className="text-[13px] font-bold tracking-tight" style={{ color: "#f5f9f3" }}>
+                  {activeMatch.awayTeam}
+                </p>
+                <p className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>Away</p>
+              </div>
             </div>
           </div>
 
-          <div className="relative z-10 mt-5 pt-4 text-center text-xs font-mono" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", color: "#83927d" }}>
-            🏟️ <span style={{ color: "#f9fbf8", fontWeight: "bold" }}>{activeMatch.venueName}</span>
+          {/* Progress bar (live only) */}
+          {isLive && (
+            <div className="mt-5">
+              <div
+                className="w-full h-1 rounded-full overflow-hidden"
+                style={{ background: "rgba(255,255,255,0.07)" }}
+              >
+                <div
+                  className="h-full rounded-full transition-all duration-1000"
+                  style={{
+                    width: `${progressPct}%`,
+                    background: "linear-gradient(90deg, #ccff00, #a3e800)",
+                    boxShadow: "0 0 8px rgba(204,255,0,0.5)",
+                  }}
+                />
+              </div>
+              <div className="flex justify-between mt-1 text-[8.5px] font-mono" style={{ color: "rgba(255,255,255,0.2)" }}>
+                <span>0′</span><span>45′</span><span>90′</span>
+              </div>
+            </div>
+          )}
+
+          {/* Venue */}
+          <div
+            className="mt-4 pt-3 text-center text-[11px] font-mono"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.055)", color: "#7a8a75" }}
+          >
+            🏟️&nbsp;
+            <span style={{ color: "#c5d0c1", fontWeight: 600 }}>{activeMatch.venueName}</span>
             <span className="ml-2">{activeMatch.venueCity}</span>
           </div>
         </div>
 
-        {/* ── Simulator ── */}
+        {/* ══ Simulator ══ */}
         {isLive && (
           <div
             className="rounded-2xl p-4"
-            style={{ background: "rgba(13,21,11,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}
+            style={{ background: "rgba(10,18,8,0.55)", border: "1px solid rgba(255,255,255,0.06)" }}
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="label-mono flex items-center gap-1">
+              <span className="label-mono flex items-center gap-1.5">
                 <Sparkles className="w-3 h-3" style={{ color: "#ccff00" }} />
-                Interactive Simulator
+                Interactive Demo
               </span>
-              <span className="text-[10px] font-mono" style={{ color: "#83927d" }}>5s = 1 match minute</span>
+              <span className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>5 s = 1 match minute</span>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setPlaying((p) => !p)}
-                className="flex items-center gap-1.5 py-2 px-3 rounded-lg border text-xs font-bold font-mono transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 py-2 px-3.5 rounded-xl text-xs font-bold font-mono transition-all cursor-pointer"
                 style={playing
-                  ? { background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#f59e0b" }
-                  : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#b8c5b4" }
+                  ? { background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.3)", color: "#fbbf24" }
+                  : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#b0bfac" }
                 }
               >
-                {playing ? <><Pause className="w-3.5 h-3.5 fill-current"/> Pause</> : <><Play className="w-3.5 h-3.5 fill-current"/> Resume</>}
+                {playing
+                  ? <><Pause  className="w-3.5 h-3.5 fill-current" /> Pause</>
+                  : <><Play   className="w-3.5 h-3.5 fill-current" /> Resume</>}
               </button>
               <button
                 onClick={triggerEvent}
-                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-extrabold transition-colors cursor-pointer"
-                style={{ background: "#ccff00", color: "#070c04", boxShadow: "0 2px 8px rgba(204,255,0,0.2)" }}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer"
+                style={{
+                  background: "#ccff00",
+                  color: "#060b03",
+                  boxShadow: "0 3px 12px rgba(204,255,0,0.25)",
+                }}
               >
                 <Plus className="w-4 h-4" /> Trigger Event
               </button>
               <button
                 onClick={reset}
-                className="w-9 h-9 flex items-center justify-center rounded-lg transition-colors cursor-pointer"
-                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#83927d" }}
+                className="w-10 h-10 flex items-center justify-center rounded-xl transition-colors cursor-pointer"
+                style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#7a8a75" }}
                 title="Reset"
               >
                 <RefreshCw className="w-4 h-4" />
@@ -254,96 +340,133 @@ export default function LivePage() {
           </div>
         )}
 
-        {/* ── Timeline ── */}
+        {/* ══ Timeline ══ */}
         <div>
-          <span className="label-mono flex items-center gap-1.5 mb-3">
-            📋 Match Timeline ({timeline.length})
-          </span>
+          <div className="flex items-center gap-2 mb-4">
+            <span className="label-mono">Match Timeline</span>
+            <span
+              className="chip chip-sage"
+              style={{ fontSize: "8.5px" }}
+            >
+              {timeline.length} events
+            </span>
+          </div>
 
           {!isLive && activeMatch.status === "upcoming" ? (
             <div
-              className="rounded-2xl py-8 px-6 text-center"
-              style={{ background: "rgba(13,21,11,0.5)", border: "1px dashed rgba(255,255,255,0.1)" }}
+              className="rounded-2xl py-10 px-6 text-center"
+              style={{ background: "rgba(10,18,8,0.5)", border: "1px dashed rgba(255,255,255,0.1)" }}
             >
-              <Calendar className="w-8 h-8 mx-auto mb-3" style={{ color: "rgba(204,255,0,0.35)" }} />
-              <h4 className="text-xs font-bold uppercase" style={{ color: "#f9fbf8" }}>Timeline Not Active</h4>
-              <p className="text-[11px] mt-1 max-w-xs mx-auto leading-relaxed" style={{ color: "#83927d" }}>
-                This fixture kicks off at {activeMatch.time}. Check back for real-time updates.
+              <div
+                className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: "rgba(204,255,0,0.08)", border: "1px solid rgba(204,255,0,0.2)" }}
+              >
+                <Calendar className="w-6 h-6" style={{ color: "#ccff00" }} />
+              </div>
+              <h4 className="text-xs font-bold uppercase mb-1" style={{ color: "#f5f9f3" }}>Timeline Not Active</h4>
+              <p className="text-[11px] max-w-xs mx-auto leading-relaxed" style={{ color: "#7a8a75" }}>
+                Kicks off at {activeMatch.time}. Check back for real-time updates.
               </p>
             </div>
           ) : (
-            <div
-              className="relative border-l ml-4 pl-6 space-y-3 pt-1"
-              style={{ borderColor: "rgba(255,255,255,0.08)" }}
-            >
-              {timeline.map((evt, idx) => {
-                const s = eventStyle(evt);
-                return (
-                  <motion.div
-                    key={`${evt.minute}-${idx}`}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.05, duration: 0.3 }}
-                    className="relative group"
-                  >
-                    {/* Minute node */}
-                    <div
-                      className="absolute -left-[34px] top-0 w-7 h-7 rounded-full flex items-center justify-center font-mono text-[9px] font-bold border-2"
-                      style={{ background: "#070c04", borderColor: s.dot, color: s.dot }}
+            <div className="relative border-l ml-4 pl-5 space-y-3 pt-1" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+              <AnimatePresence initial={false}>
+                {timeline.map((evt, idx) => {
+                  const s = getEventStyle(evt.type);
+                  return (
+                    <motion.div
+                      key={`${evt.minute}-${idx}`}
+                      initial={{ opacity: 0, x: -12, scale: 0.96 }}
+                      animate={{ opacity: 1, x: 0, scale: 1 }}
+                      transition={{ duration: 0.28, ease: [0.22,1,0.36,1], delay: idx < 3 ? idx * 0.04 : 0 }}
+                      className="relative group"
                     >
-                      {evt.minute}
-                    </div>
-
-                    {/* Event card */}
-                    <div
-                      className="rounded-2xl p-3.5 transition-all group-hover:translate-x-0.5"
-                      style={{ background: s.bg, border: `1px solid ${s.border}` }}
-                    >
-                      <div className="flex items-center gap-1.5 mb-1">
-                        <span>{s.icon}</span>
-                        {evt.type === "yellow" && <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#f59e0b" }} />}
-                        {evt.type === "red"    && <AlertCircle   className="w-3.5 h-3.5" style={{ color: "#ff3b30" }} />}
-                        <h4 className="text-xs font-bold" style={{ color: "#f9fbf8" }}>
-                          {evt.player ? `${evt.player}` : evt.type.charAt(0).toUpperCase() + evt.type.slice(1)}
-                          {evt.team && <span className="ml-1 font-normal text-[10px]" style={{ color: "#83927d" }}>({evt.team})</span>}
-                        </h4>
+                      {/* Minute node */}
+                      <div
+                        className="absolute -left-[33px] top-0 w-7 h-7 rounded-full flex items-center justify-center font-mono text-[9px] font-bold border-2"
+                        style={{ background: "#060b03", borderColor: s.dot, color: s.dot }}
+                      >
+                        {evt.minute}
                       </div>
-                      <p className="text-xs leading-relaxed" style={{ color: "#b8c5b4" }}>{evt.summary}</p>
-                    </div>
-                  </motion.div>
-                );
-              })}
+
+                      {/* Event card */}
+                      <div
+                        className="rounded-xl p-3.5 transition-transform group-hover:translate-x-0.5"
+                        style={{
+                          background: s.bg,
+                          border: `1px solid ${s.border}`,
+                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm">{s.icon}</span>
+                          <span className="chip" style={{ background: `${s.dot}18`, color: s.dot, border: `1px solid ${s.dot}33`, fontSize: "8px" }}>
+                            {s.label}
+                          </span>
+                          {evt.type === "yellow" && <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#fbbf24" }} />}
+                          {evt.type === "red"    && <AlertCircle   className="w-3.5 h-3.5" style={{ color: "#ff3b30" }} />}
+                        </div>
+                        <p className="text-xs font-semibold" style={{ color: "#f5f9f3" }}>
+                          {evt.player ?? (evt.type.charAt(0).toUpperCase() + evt.type.slice(1))}
+                          {evt.team && (
+                            <span className="ml-1.5 font-normal text-[10px]" style={{ color: "#7a8a75" }}>
+                              ({evt.team})
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "#9aaa93" }}>
+                          {evt.summary}
+                        </p>
+                      </div>
+                    </motion.div>
+                  );
+                })}
+              </AnimatePresence>
             </div>
           )}
         </div>
 
-        {/* ── Next fixtures ── */}
-        <div className="pt-2">
-          <span className="label-mono flex items-center gap-1.5 mb-3">🗓 Coming Up</span>
+        {/* ══ Other Fixtures ══ */}
+        <div className="pt-1">
+          <div className="label-mono flex items-center gap-1.5 mb-3">
+            🗓 Other Fixtures
+          </div>
           <div className="space-y-2">
             {MATCHES.filter((m) => m.id !== activeMatch.id).map((match) => (
               <motion.button
                 key={match.id}
-                whileTap={{ scale: 0.99 }}
+                whileTap={{ scale: 0.985 }}
                 onClick={() => handleMatchSelect(match)}
-                className="w-full text-left rounded-2xl p-3.5 flex items-center justify-between transition-all cursor-pointer"
-                style={{ background: "rgba(13,21,11,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}
+                className="w-full text-left rounded-2xl p-3.5 flex items-center justify-between transition-all cursor-pointer group"
+                style={{
+                  background: "rgba(10,18,8,0.55)",
+                  border: "1px solid rgba(255,255,255,0.055)",
+                }}
               >
-                <div>
+                <div className="flex-1 min-w-0">
                   <span className="label-mono">{match.league}</span>
-                  <p className="text-xs font-bold mt-0.5" style={{ color: "#f9fbf8" }}>
+                  <p className="text-[12.5px] font-bold mt-0.5" style={{ color: "#f5f9f3" }}>
                     {match.homeFlag} {match.homeTeam} vs {match.awayTeam} {match.awayFlag}
                   </p>
-                  <p className="text-[10px] font-mono mt-0.5" style={{ color: "#83927d" }}>
+                  <p className="text-[10px] font-mono mt-0.5" style={{ color: "#7a8a75" }}>
                     {match.venueCity} · {match.time}
                     {match.status === "finished" && " · FT"}
                   </p>
                 </div>
-                <div
-                  className="text-[10px] font-mono font-bold px-2.5 py-1.5 rounded-lg flex-shrink-0 transition-colors"
-                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#83927d" }}
-                >
-                  {match.status === "finished" ? `${match.scoreHome}–${match.scoreAway}` : "Match Hub 🏟️"}
+                <div className="flex items-center gap-2">
+                  {match.status === "finished" ? (
+                    <span
+                      className="text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg flex-shrink-0"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#9aaa93" }}
+                    >
+                      {match.scoreHome}–{match.scoreAway}
+                    </span>
+                  ) : match.status === "live" ? (
+                    <span className="chip chip-live">Live</span>
+                  ) : (
+                    <span className="chip chip-sage">Hub 🏟</span>
+                  )}
+                  <ChevronRight className="w-4 h-4 opacity-30 group-hover:opacity-60 transition-opacity" style={{ color: "#ccff00" }} />
                 </div>
               </motion.button>
             ))}
