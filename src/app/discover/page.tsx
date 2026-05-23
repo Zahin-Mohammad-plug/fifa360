@@ -1,295 +1,470 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/appStore";
 import { MATCHES } from "@/data/matches";
-import { VENUES } from "@/data/venues";
-import { rankVenues } from "@/lib/ranking";
-import { MatchHeroChip } from "@/components/MatchHeroChip";
-import { VenueRankingCard } from "@/components/VenueRankingCard";
-import { VenueDetailDrawer } from "@/components/VenueDetailDrawer";
-import { ConciergeCallSimulator } from "@/components/ConciergeCallSimulator";
+import { getVenuesForMatch } from "@/data/venues";
 import { Venue, Match } from "@/types";
-import { Bell, Phone, Zap, CheckCircle, MapPin } from "lucide-react";
-import { NotificationSheet } from "@/components/NotificationSheet";
+import {
+  Search, Compass, ShieldCheck, MapPin, Users, Flame,
+  ExternalLink, Star, AlertTriangle, ChevronRight,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-type SortMode = "score" | "eta" | "capacity" | "vibe";
-
-const SORT_OPTIONS: { id: SortMode; label: string; emoji: string }[] = [
-  { id: "score",    label: "Best Match", emoji: "⭐" },
-  { id: "eta",      label: "Closest",    emoji: "🚶" },
-  { id: "capacity", label: "Most Space", emoji: "🏠" },
-  { id: "vibe",     label: "Best Vibe",  emoji: "🎉" },
-];
+type Filter = "All" | "Verified Only" | "Near Me";
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const { selectedMatch, setSelectedMatch, setSelectedVenue, preferences, conciergeCallsDone, setConciergeRunning, setConciergeDone } = useAppStore();
+  const { selectedMatch, setSelectedMatch, setSelectedVenue } = useAppStore();
 
-  const [selectedVenueLocal, setSelectedVenueLocal] = useState<Venue | null>(null);
-  const [drawerOpen,    setDrawerOpen]    = useState(false);
-  const [showConcierge, setShowConcierge] = useState(false);
-  const [notifOpen,     setNotifOpen]     = useState(false);
-  const [sortMode,      setSortMode]      = useState<SortMode>("score");
+  const [query,      setQuery]      = useState("");
+  const [filter,     setFilter]     = useState<Filter>("All");
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [loading,    setLoading]    = useState(false);
+  const [fabGlow,    setFabGlow]    = useState(true);
 
   const activeMatch = selectedMatch ?? MATCHES.find((m) => m.status === "live") ?? MATCHES[0];
-  const isLive = activeMatch.status === "live";
 
-  const rankedVenues = useMemo(() => {
-    const venues = rankVenues(VENUES, preferences, activeMatch);
-    if (sortMode === "eta")      return [...venues].sort((a, b) => (a.etaMinutes ?? 99) - (b.etaMinutes ?? 99));
-    if (sortMode === "capacity") {
-      const order = ["low","medium","high","full-soon"];
-      return [...venues].sort((a, b) => order.indexOf(a.concierge?.capacityStatus ?? "medium") - order.indexOf(b.concierge?.capacityStatus ?? "medium"));
-    }
-    if (sortMode === "vibe") return [...venues].sort((b, a) => (a.vibeTags.length + (a.concierge ? 1 : 0)) - (b.vibeTags.length + (b.concierge ? 1 : 0)));
-    return venues;
-  }, [preferences, activeMatch, sortMode]);
+  const venues = getVenuesForMatch(activeMatch.id);
 
-  const handleSelectVenue  = useCallback((v: Venue) => { setSelectedVenueLocal(v); setSelectedVenue(v); setDrawerOpen(true); }, [setSelectedVenue]);
-  const handlePlanRoute    = useCallback((v: Venue) => { setSelectedVenue(v); router.push("/route"); }, [setSelectedVenue, router]);
-  const handleSelectMatch  = useCallback((m: Match) => { setSelectedMatch(m); setConciergeDone(false); setConciergeRunning(false); setShowConcierge(false); }, [setSelectedMatch, setConciergeDone, setConciergeRunning]);
+  const filtered = venues.filter((v) => {
+    const q = query.toLowerCase();
+    const matchSearch =
+      v.name.toLowerCase().includes(q) ||
+      v.address.toLowerCase().includes(q) ||
+      v.affiliation.toLowerCase().includes(q);
+    if (filter === "Verified Only") return matchSearch && v.trustLevel !== "community";
+    if (filter === "Near Me") return matchSearch && (v.distanceKm ?? 99) <= 1.5;
+    return matchSearch;
+  });
+
+  // Skeleton on match change
+  useEffect(() => {
+    setLoading(true);
+    setExpandedId(null);
+    const t = setTimeout(() => setLoading(false), 700);
+    return () => clearTimeout(t);
+  }, [activeMatch.id]);
+
+  const handleMatchSelect = useCallback((m: Match) => {
+    setSelectedMatch(m);
+    setSelectedVenue(null);
+  }, [setSelectedMatch, setSelectedVenue]);
+
+  const handleVenueRoute = useCallback((v: Venue, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedVenue(v);
+    router.push("/route");
+  }, [setSelectedVenue, router]);
+
+  const densityColor = (d: string) => {
+    if (d === "Packed")  return "#ff3b30";
+    if (d === "High")    return "#f59e0b";
+    if (d === "Medium")  return "#ccff00";
+    return "#83927d";
+  };
 
   return (
-    <div className="page-enter min-h-screen">
-      {/* ── Page header ── */}
-      <div className="border-b"
-           style={{ borderColor: "rgba(255,255,255,0.06)", background: "rgba(4,8,18,0.6)" }}>
-        <div className="page-container py-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-black text-white tracking-tight">Discover</h1>
-              <p className="text-sm mt-1 flex items-center gap-1.5"
-                 style={{ color: "rgba(255,255,255,0.4)" }}>
-                <MapPin className="w-3.5 h-3.5" />
-                Times Square, New York · {rankedVenues.length} venues ranked
-                {isLive && (
-                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full ml-1"
-                        style={{ color: "#ff5566", background: "rgba(255,23,68,0.12)", border: "1px solid rgba(255,23,68,0.3)" }}>
-                    LIVE
-                  </span>
-                )}
-              </p>
-            </div>
-            <button
-              onClick={() => setNotifOpen(true)}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all hover:brightness-110"
-              style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.1)",
-                color: "rgba(255,255,255,0.7)",
-              }}
-            >
-              <Bell className="w-4 h-4" />
-              <span className="hidden sm:inline">Match Alerts</span>
-            </button>
+    <div className="page-enter pb-4">
+      <div className="page-container pt-4 space-y-5">
+
+        {/* ── Match Picker ── */}
+        <div>
+          <div className="label-mono flex items-center gap-1.5 mb-3">
+            <Compass className="w-3 h-3" style={{ color: "#ccff00" }} />
+            Select Active Fixture
           </div>
-        </div>
-      </div>
-
-      <div className="page-container py-8">
-        {/* ── Match selector ── */}
-        <section className="mb-8">
-          <div className="section-label mb-4">Select Match</div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {MATCHES.filter((m) => m.status !== "finished").slice(0, 3).map((match, i) => (
-              <motion.button
-                key={match.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.06, duration: 0.3, ease: [0.22,1,0.36,1] }}
-                whileTap={{ scale: 0.98 }}
-                onClick={() => handleSelectMatch(match)}
-                className="w-full rounded-2xl overflow-hidden transition-all duration-200"
-                style={{
-                  outline: activeMatch.id === match.id
-                    ? "2px solid rgba(0,180,255,0.5)"
-                    : "2px solid transparent",
-                  outlineOffset: "2px",
-                }}
-              >
-                <MatchHeroChip match={match} />
-              </motion.button>
-            ))}
-          </div>
-        </section>
-
-        {/* ── Two-column layout ── */}
-        <div className="flex gap-8 items-start">
-          {/* LEFT: Controls */}
-          <aside className="w-64 shrink-0 hidden lg:block space-y-5 sticky top-[calc(var(--nav-height)+24px)]">
-            {/* Sort */}
-            <div>
-              <div className="text-[10px] font-black uppercase tracking-[0.18em] mb-3"
-                   style={{ color: "rgba(255,255,255,0.3)" }}>
-                Sort By
-              </div>
-              <div className="space-y-1.5">
-                {SORT_OPTIONS.map(({ id, label, emoji }) => (
-                  <button
-                    key={id}
-                    onClick={() => setSortMode(id)}
-                    className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left"
-                    style={sortMode === id ? {
-                      background: "rgba(0,180,255,0.15)",
-                      border: "1px solid rgba(0,180,255,0.35)",
-                      color: "#00b4ff",
-                    } : {
-                      background: "rgba(255,255,255,0.04)",
-                      border: "1px solid rgba(255,255,255,0.07)",
-                      color: "rgba(255,255,255,0.45)",
-                    }}
-                  >
-                    <span className="text-base">{emoji}</span>
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Concierge */}
-            <AnimatePresence mode="wait">
-              {!showConcierge && !conciergeCallsDone && (
+          <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
+            {MATCHES.map((match, i) => {
+              const isSelected = activeMatch.id === match.id;
+              return (
                 <motion.button
-                  key="cta"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
+                  key={match.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => setShowConcierge(true)}
-                  className="w-full flex flex-col gap-3 rounded-2xl px-4 py-4 relative overflow-hidden text-left"
+                  onClick={() => handleMatchSelect(match)}
+                  className="relative flex-shrink-0 w-60 p-4 rounded-2xl text-left cursor-pointer select-none"
                   style={{
-                    background: "linear-gradient(135deg, rgba(124,77,255,0.15) 0%, rgba(12,26,46,0.8) 100%)",
-                    border: "1px solid rgba(124,77,255,0.3)",
+                    background: isSelected
+                      ? "rgba(29,45,22,0.85)"
+                      : "rgba(13,21,11,0.6)",
+                    border: isSelected
+                      ? "1px solid rgba(204,255,0,0.4)"
+                      : "1px solid rgba(255,255,255,0.06)",
+                    boxShadow: isSelected
+                      ? "0 8px 24px rgba(204,255,0,0.08)"
+                      : "none",
                   }}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
-                         style={{ background: "rgba(124,77,255,0.2)", border: "1px solid rgba(124,77,255,0.4)" }}>
-                      <Phone className="w-4 h-4" style={{ color: "#7c4dff" }} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-black text-white">AI Venue Check</div>
-                      <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Verify capacity live</div>
-                    </div>
+                  {/* Top neon line on selected */}
+                  {isSelected && (
+                    <div
+                      className="absolute top-0 left-6 right-6 h-px"
+                      style={{ background: "linear-gradient(90deg,transparent,#ccff00,transparent)", boxShadow: "0 0 8px #ccff00" }}
+                    />
+                  )}
+
+                  {/* League + status */}
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span
+                      className="text-[9px] font-mono font-semibold px-2 py-0.5 rounded uppercase"
+                      style={{ background: "rgba(255,255,255,0.05)", color: "#83927d", border: "1px solid rgba(255,255,255,0.06)" }}
+                    >
+                      {match.league}
+                    </span>
+                    {match.status === "live" ? (
+                      <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full" style={{ background: "rgba(255,59,48,0.12)", border: "1px solid rgba(255,59,48,0.25)" }}>
+                        <span className="w-1.5 h-1.5 rounded-full animate-live-dot" style={{ background: "#ff3b30" }} />
+                        <span className="text-[8px] font-mono font-bold uppercase" style={{ color: "#ff3b30" }}>
+                          Live {match.minute}&apos;
+                        </span>
+                      </span>
+                    ) : match.status === "finished" ? (
+                      <span className="text-[8px] font-mono" style={{ color: "#83927d" }}>FT</span>
+                    ) : (
+                      <span className="text-[8px] font-mono" style={{ color: "#83927d" }}>{match.time}</span>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full w-fit"
-                       style={{ background: "rgba(124,77,255,0.2)", border: "1px solid rgba(124,77,255,0.4)" }}>
-                    <Zap className="w-3 h-3" style={{ color: "#7c4dff" }} />
-                    <span className="text-[10px] font-black" style={{ color: "#a57aff" }}>Start Calls</span>
+
+                  {/* Teams */}
+                  <div className="space-y-1.5">
+                    {[
+                      { team: match.homeTeam, flag: match.homeFlag, color: match.homeColor, score: match.scoreHome, side: "H" },
+                      { team: match.awayTeam, flag: match.awayFlag, color: match.awayColor, score: match.scoreAway, side: "A" },
+                    ].map(({ team, flag, color, score, side }) => (
+                      <div key={side} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg leading-none">{flag}</span>
+                          <span className="text-[13px] font-bold" style={{ color: isSelected ? "#f9fbf8" : "#a0a89a" }}>{team}</span>
+                        </div>
+                        {match.status !== "upcoming" && (
+                          <span className="text-sm font-mono font-bold" style={{ color: "#f9fbf8", minWidth: "1.5ch", textAlign: "right" }}>
+                            {score}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-2.5 pt-2 border-t flex items-center justify-between text-[9px] font-mono" style={{ borderColor: "rgba(255,255,255,0.06)", color: "#83927d" }}>
+                    <span>{match.venueCity}</span>
+                    <span style={{ color: isSelected ? "#ccff00" : "#83927d" }}>{match.tournament.replace("FIFA ", "")}</span>
                   </div>
                 </motion.button>
-              )}
-              {conciergeCallsDone && (
-                <motion.div
-                  key="done"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="flex items-center gap-2 rounded-xl px-3 py-3"
-                  style={{ background: "rgba(0,255,136,0.07)", border: "1px solid rgba(0,255,136,0.2)" }}
-                >
-                  <CheckCircle className="w-4 h-4 shrink-0" style={{ color: "#00ff88" }} />
-                  <span className="text-xs font-bold" style={{ color: "rgba(0,255,136,0.9)" }}>
-                    Venues verified
-                  </span>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {showConcierge && (
-              <ConciergeCallSimulator venues={VENUES} onComplete={() => setShowConcierge(false)} />
-            )}
-          </aside>
-
-          {/* RIGHT: Venue cards */}
-          <div className="flex-1 min-w-0">
-            {/* Mobile sort chips */}
-            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar mb-5 lg:hidden">
-              {SORT_OPTIONS.map(({ id, label, emoji }) => (
-                <button
-                  key={id}
-                  onClick={() => setSortMode(id)}
-                  className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
-                  style={sortMode === id ? {
-                    background: "rgba(0,180,255,0.18)", border: "1px solid rgba(0,180,255,0.4)", color: "#00b4ff",
-                  } : {
-                    background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(255,255,255,0.45)",
-                  }}
-                >
-                  <span>{emoji}</span>{label}
-                </button>
-              ))}
-            </div>
-
-            {/* Mobile concierge CTA */}
-            <div className="lg:hidden mb-5">
-              <AnimatePresence mode="wait">
-                {!showConcierge && !conciergeCallsDone && (
-                  <motion.button
-                    key="cta-m"
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setShowConcierge(true)}
-                    className="w-full flex items-center justify-between rounded-2xl px-4 py-4 relative overflow-hidden"
-                    style={{ background: "linear-gradient(135deg, rgba(124,77,255,0.15) 0%, rgba(12,26,46,0.8) 100%)", border: "1px solid rgba(124,77,255,0.3)" }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                           style={{ background: "rgba(124,77,255,0.2)", border: "1px solid rgba(124,77,255,0.4)" }}>
-                        <Phone className="w-4 h-4" style={{ color: "#7c4dff" }} />
-                      </div>
-                      <div className="text-left">
-                        <div className="text-sm font-black text-white">Check venues by phone</div>
-                        <div className="text-[11px]" style={{ color: "rgba(255,255,255,0.4)" }}>Verify RSVP, crowd & capacity</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1 px-2.5 py-1 rounded-full"
-                         style={{ background: "rgba(124,77,255,0.2)", border: "1px solid rgba(124,77,255,0.4)" }}>
-                      <Zap className="w-3 h-3" style={{ color: "#7c4dff" }} /><span className="text-[11px] font-black" style={{ color: "#a57aff" }}>AI</span>
-                    </div>
-                  </motion.button>
-                )}
-                {conciergeCallsDone && (
-                  <motion.div key="done-m" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                    className="flex items-center gap-2 rounded-xl px-4 py-3"
-                    style={{ background: "rgba(0,255,136,0.07)", border: "1px solid rgba(0,255,136,0.2)" }}>
-                    <CheckCircle className="w-4 h-4" style={{ color: "#00ff88" }} />
-                    <span className="text-xs font-bold" style={{ color: "rgba(0,255,136,0.9)" }}>Venues verified · Rankings updated</span>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-              {showConcierge && <div className="mt-3"><ConciergeCallSimulator venues={VENUES} onComplete={() => setShowConcierge(false)} /></div>}
-            </div>
-
-            {/* Venue grid */}
-            {!showConcierge && (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                {rankedVenues.map((venue, i) => (
-                  <motion.div
-                    key={venue.id}
-                    initial={{ opacity: 0, y: 14 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.06 + i * 0.06, duration: 0.32, ease: [0.22,1,0.36,1] }}
-                  >
-                    <VenueRankingCard
-                      venue={venue}
-                      rank={i + 1}
-                      isTop={i === 0}
-                      onSelect={handleSelectVenue}
-                      conciergeVerified={conciergeCallsDone && !!venue.concierge}
-                    />
-                  </motion.div>
-                ))}
-              </div>
-            )}
+              );
+            })}
           </div>
         </div>
+
+        {/* ── Search & Filters ── */}
+        <div
+          id="venue_list_anchor"
+          className="rounded-2xl p-4 space-y-3"
+          style={{ background: "rgba(13,21,11,0.5)", border: "1px solid rgba(255,255,255,0.05)" }}
+        >
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: "#83927d" }} />
+            <input
+              type="text"
+              placeholder="Search venues, areas, affiliations…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full py-2.5 pl-9 pr-4 rounded-xl text-xs outline-none transition-all"
+              style={{
+                background: "rgba(7,12,4,0.8)",
+                border: "1px solid rgba(255,255,255,0.07)",
+                color: "#f9fbf8",
+                fontFamily: "var(--font-sans)",
+              }}
+              onFocus={(e) => (e.target.style.borderColor = "rgba(204,255,0,0.4)")}
+              onBlur={(e)  => (e.target.style.borderColor = "rgba(255,255,255,0.07)")}
+            />
+          </div>
+          <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
+            {(["All", "Verified Only", "Near Me"] as Filter[]).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className="flex-shrink-0 px-3 py-1.5 rounded-full text-[10px] font-semibold transition-all cursor-pointer select-none"
+                style={filter === f ? {
+                  background: "#ccff00", color: "#070c04",
+                } : {
+                  background: "rgba(24,38,18,0.7)", color: "#83927d",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Venue listing header ── */}
+        <div className="flex items-center justify-between">
+          <span className="label-mono">Ranked Fan Venues ({filtered.length})</span>
+          <span className="text-[10px] font-mono" style={{ color: "#83927d" }}>By Atmosphere</span>
+        </div>
+
+        {/* ── Skeleton ── */}
+        {loading ? (
+          <div className="space-y-3">
+            {[0,1].map((i) => (
+              <div key={i} className="rounded-2xl p-4 space-y-3 h-32 animate-shimmer" style={{ border: "1px solid rgba(255,255,255,0.05)" }} />
+            ))}
+          </div>
+        ) : filtered.length === 0 ? (
+          /* ── Empty ── */
+          <div
+            className="rounded-2xl py-10 px-6 text-center flex flex-col items-center"
+            style={{ background: "rgba(13,21,11,0.5)", border: "1px dashed rgba(255,255,255,0.1)" }}
+          >
+            <AlertTriangle className="w-8 h-8 mb-3" style={{ color: "#f59e0b" }} />
+            <h4 className="text-sm font-bold" style={{ color: "#f9fbf8" }}>No venues found</h4>
+            <p className="text-xs mt-1 max-w-xs leading-relaxed" style={{ color: "#83927d" }}>
+              No supporter lounges match &ldquo;{query}&rdquo; for this fixture.
+            </p>
+            <button
+              onClick={() => { setQuery(""); setFilter("All"); }}
+              className="mt-4 text-xs font-bold px-3 py-1.5 rounded-lg transition-colors"
+              style={{ color: "#ccff00", background: "rgba(204,255,0,0.1)", border: "1px solid rgba(204,255,0,0.25)" }}
+            >
+              Reset Search
+            </button>
+          </div>
+        ) : (
+          /* ── Venue cards ── */
+          <div className="space-y-3">
+            {filtered.map((venue, idx) => {
+              const isOpen = expandedId === venue.id;
+              const capPct = typeof venue.capacity === "number"
+                ? Math.min(100, Math.round((venue.etaMinutes ?? 50) * 1.2))
+                : null;
+
+              return (
+                <motion.div
+                  key={venue.id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: idx * 0.05, duration: 0.3, ease: [0.22,1,0.36,1] }}
+                  onClick={() => setExpandedId(isOpen ? null : venue.id)}
+                  className="rounded-2xl p-4 cursor-pointer overflow-hidden relative"
+                  style={{
+                    background: isOpen ? "rgba(29,45,22,0.8)" : "rgba(13,21,11,0.55)",
+                    border: isOpen ? "1px solid rgba(204,255,0,0.28)" : "1px solid rgba(255,255,255,0.05)",
+                    boxShadow: isOpen ? "0 12px 32px rgba(0,0,0,0.45)" : "none",
+                    transition: "background 0.25s, border-color 0.25s",
+                  }}
+                >
+                  {/* Header row */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span
+                          className="flex-shrink-0 text-[10px] font-mono font-bold flex items-center justify-center rounded"
+                          style={{ width: 20, height: 20, background: "rgba(204,255,0,0.12)", border: "1px solid rgba(204,255,0,0.25)", color: "#ccff00" }}
+                        >
+                          #{idx + 1}
+                        </span>
+                        <h4 className="text-sm font-bold truncate" style={{ color: "#f9fbf8" }}>
+                          {venue.name}
+                        </h4>
+                        {venue.trustLevel !== "community" && (
+                          <ShieldCheck className="w-4 h-4 flex-shrink-0" style={{ color: "#ccff00" }} aria-label="Verified" />
+                        )}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono" style={{ color: "#83927d" }}>
+                        <span className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" style={{ color: "#ccff00" }} />
+                          {venue.distanceKm} km
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="w-3 h-3" style={{ color: "#ccff00" }} />
+                          {venue.density}
+                        </span>
+                        <span
+                          className="text-[10px] px-1.5 py-0.5 rounded"
+                          style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#a0a89a" }}
+                        >
+                          {venue.affiliation}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Atmosphere badge */}
+                    <div className="flex flex-col items-end flex-shrink-0">
+                      <div
+                        className="flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-mono font-bold"
+                        style={{ background: "rgba(204,255,0,0.1)", border: "1px solid rgba(204,255,0,0.3)", color: "#ccff00" }}
+                      >
+                        <Flame className="w-3.5 h-3.5" />
+                        {venue.confidence}%
+                      </div>
+                      <span className="text-[8px] font-mono mt-0.5" style={{ color: "#83927d" }}>Atmosphere</span>
+                    </div>
+                  </div>
+
+                  {/* Stars + density */}
+                  <div className="flex items-center gap-2 mt-2 text-[10px] font-mono" style={{ color: "#83927d" }}>
+                    <div className="flex" style={{ color: "#f59e0b" }}>
+                      {[1,2,3,4,5].map((s) => (
+                        <Star key={s} className="w-3 h-3 fill-current" />
+                      ))}
+                    </div>
+                    <span>{venue.rating}</span>
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[9px] font-semibold"
+                      style={{ background: `${densityColor(venue.density)}18`, color: densityColor(venue.density) }}
+                    >
+                      {venue.density} Density
+                    </span>
+                  </div>
+
+                  {/* Collapsed: short preview */}
+                  {!isOpen && (
+                    <p className="text-xs mt-2.5 truncate leading-relaxed" style={{ color: "#83927d" }}>
+                      💡 {venue.conciergeInsight}
+                    </p>
+                  )}
+
+                  {/* Expand arrow */}
+                  <ChevronRight
+                    className="absolute top-4 right-4 w-4 h-4 transition-transform"
+                    style={{ color: "rgba(255,255,255,0.2)", transform: isOpen ? "rotate(90deg)" : "rotate(0deg)" }}
+                  />
+
+                  {/* ── Expanded concierge panel ── */}
+                  <AnimatePresence>
+                    {isOpen && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.28, ease: [0.22,1,0.36,1] }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-4 pt-4 space-y-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                          {/* Concierge box */}
+                          <div
+                            className="rounded-xl p-3 flex gap-2.5"
+                            style={{ background: "rgba(7,12,4,0.8)", border: "1px solid rgba(204,255,0,0.15)" }}
+                          >
+                            <div
+                              className="flex-shrink-0 flex items-center justify-center rounded-lg text-[10px] font-mono font-bold mt-0.5"
+                              style={{ width: 28, height: 28, background: "rgba(204,255,0,0.1)", border: "1px solid rgba(204,255,0,0.3)", color: "#ccff00" }}
+                            >
+                              MC
+                            </div>
+                            <div>
+                              <span className="block text-[10px] font-mono font-bold uppercase mb-1" style={{ color: "#ccff00", letterSpacing: "0.15em" }}>
+                                Concierge Recommendation
+                              </span>
+                              <p className="text-xs leading-relaxed" style={{ color: "#e8f0e5" }}>
+                                {venue.conciergeInsight}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Insights list */}
+                          <div className="space-y-2">
+                            <span className="text-[10px] font-mono font-bold uppercase" style={{ color: "#f59e0b", letterSpacing: "0.15em" }}>
+                              Atmosphere & Amenities
+                            </span>
+                            <ul className="space-y-1.5">
+                              {venue.insights.map((insight, i) => (
+                                <li key={i} className="flex items-start gap-2 text-xs leading-relaxed" style={{ color: "#b8c5b4" }}>
+                                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0" style={{ background: "#ccff00" }} />
+                                  {insight}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {/* Density bar */}
+                          <div className="space-y-1.5">
+                            <div className="flex justify-between text-[9px] font-mono uppercase" style={{ color: "#83927d" }}>
+                              <span>Crowd Density Timeline</span>
+                              <span style={{ color: densityColor(venue.density) }}>{venue.density} Peak</span>
+                            </div>
+                            <div className="flex gap-1 h-3">
+                              {["Pre", "K-30", "K-15", "KO", "+45"].map((t, i) => {
+                                const peak = i === 3;
+                                const high = i >= 2;
+                                return (
+                                  <div
+                                    key={t}
+                                    className="flex-1 rounded-sm"
+                                    style={{
+                                      background: peak
+                                        ? `linear-gradient(to top, ${densityColor(venue.density)}bb, ${densityColor(venue.density)})`
+                                        : high
+                                        ? "rgba(204,255,0,0.25)"
+                                        : "rgba(255,255,255,0.08)",
+                                      boxShadow: peak ? `0 0 8px ${densityColor(venue.density)}55` : "none",
+                                    }}
+                                    title={t}
+                                  />
+                                );
+                              })}
+                            </div>
+                            <div className="flex justify-between text-[8px] font-mono" style={{ color: "rgba(255,255,255,0.2)" }}>
+                              {["Pre", "K-30", "K-15", "K·O", "+45"].map((t) => (
+                                <span key={t}>{t}</span>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* CTAs */}
+                          <div className="flex gap-2">
+                            <button
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-semibold transition-colors"
+                              style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "#b8c5b4" }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Users className="w-4 h-4" style={{ color: "#ccff00" }} /> Share Plan
+                            </button>
+                            <button
+                              className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                              style={{ background: "#ccff00", color: "#070c04" }}
+                              onClick={(e) => handleVenueRoute(venue, e)}
+                            >
+                              <ExternalLink className="w-4 h-4" /> Transit Route
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <VenueDetailDrawer venue={selectedVenueLocal} open={drawerOpen} onClose={() => setDrawerOpen(false)} onPlanRoute={handlePlanRoute} />
-      <NotificationSheet open={notifOpen} onClose={() => setNotifOpen(false)} />
+      {/* ── FAB ── */}
+      <div className="fixed bottom-[calc(var(--bottom-nav-height)+12px)] right-4 z-40">
+        <motion.button
+          whileTap={{ scale: 0.94 }}
+          onClick={() => {
+            setFabGlow(false);
+            document.getElementById("venue_list_anchor")?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className="flex items-center gap-2 px-5 py-3 rounded-full text-xs font-bold shadow-2xl cursor-pointer select-none"
+          style={{
+            background: fabGlow ? "#ccff00" : "rgba(24,38,18,0.9)",
+            color: fabGlow ? "#070c04" : "#83927d",
+            border: fabGlow ? "none" : "1px solid rgba(255,255,255,0.1)",
+            boxShadow: fabGlow ? "0 0 20px rgba(204,255,0,0.45)" : "none",
+          }}
+        >
+          <Compass className="w-4 h-4" />
+          Check Venues
+        </motion.button>
+      </div>
     </div>
   );
 }

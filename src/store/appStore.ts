@@ -2,30 +2,25 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { Match, Venue, UserPreferences, RouteInfo } from "@/types";
-import { NotificationPreferences, DEFAULT_PREFS } from "@/lib/notifications";
+import { Match, Venue, UserPreferences, RouteInfo, FanPreferences } from "@/types";
 
 interface AppState {
   selectedMatch: Match | null;
   selectedVenue: Venue | null;
   userLocation: { lat: number; lng: number; label: string } | null;
   preferences: UserPreferences;
-  notificationPrefs: NotificationPreferences;
+  fanPrefs: FanPreferences;
   routeInfo: RouteInfo | null;
   activeTab: "discover" | "route" | "live" | "profile";
-  conciergeCallsRunning: boolean;
-  conciergeCallsDone: boolean;
   shareUrl: string | null;
 
   setSelectedMatch: (match: Match) => void;
   setSelectedVenue: (venue: Venue | null) => void;
   setUserLocation: (loc: { lat: number; lng: number; label: string }) => void;
   setPreferences: (prefs: Partial<UserPreferences>) => void;
-  setNotificationPrefs: (prefs: Partial<NotificationPreferences>) => void;
+  setFanPrefs: (prefs: Partial<FanPreferences>) => void;
   setRouteInfo: (route: RouteInfo | null) => void;
   setActiveTab: (tab: AppState["activeTab"]) => void;
-  setConciergeRunning: (v: boolean) => void;
-  setConciergeDone: (v: boolean) => void;
   setShareUrl: (url: string | null) => void;
   reset: () => void;
 }
@@ -36,7 +31,15 @@ const DEFAULT_PREFERENCES: UserPreferences = {
   preferredVibe: "loud",
   indoorOutdoor: "any",
   budgetSensitivity: 2,
-  transportMode: "walking",
+  transportMode: "transit",
+};
+
+const DEFAULT_FAN_PREFS: FanPreferences = {
+  favoriteTeam: "Argentina",
+  kickoffAlerts: true,
+  scoreUpdates: true,
+  routeReminders: false,
+  crowdWarnings: false,
 };
 
 export const useAppStore = create<AppState>()(
@@ -50,27 +53,19 @@ export const useAppStore = create<AppState>()(
         label: "Times Square, New York",
       },
       preferences: DEFAULT_PREFERENCES,
-      notificationPrefs: DEFAULT_PREFS,
+      fanPrefs: DEFAULT_FAN_PREFS,
       routeInfo: null,
       activeTab: "discover",
-      conciergeCallsRunning: false,
-      conciergeCallsDone: false,
       shareUrl: null,
 
-      setSelectedMatch: (match) => set({ selectedMatch: match }),
-      setSelectedVenue: (venue) => set({ selectedVenue: venue }),
-      setUserLocation: (loc) => set({ userLocation: loc }),
-      setPreferences: (prefs) =>
-        set((s) => ({ preferences: { ...s.preferences, ...prefs } })),
-      setNotificationPrefs: (prefs) =>
-        set((s) => ({
-          notificationPrefs: { ...s.notificationPrefs, ...prefs },
-        })),
-      setRouteInfo: (route) => set({ routeInfo: route }),
-      setActiveTab: (tab) => set({ activeTab: tab }),
-      setConciergeRunning: (v) => set({ conciergeCallsRunning: v }),
-      setConciergeDone: (v) => set({ conciergeCallsDone: v }),
-      setShareUrl: (url) => set({ shareUrl: url }),
+      setSelectedMatch:  (match)  => set({ selectedMatch: match }),
+      setSelectedVenue:  (venue)  => set({ selectedVenue: venue }),
+      setUserLocation:   (loc)    => set({ userLocation: loc }),
+      setPreferences:    (prefs)  => set((s) => ({ preferences: { ...s.preferences, ...prefs } })),
+      setFanPrefs:       (prefs)  => set((s) => ({ fanPrefs: { ...s.fanPrefs, ...prefs } })),
+      setRouteInfo:      (route)  => set({ routeInfo: route }),
+      setActiveTab:      (tab)    => set({ activeTab: tab }),
+      setShareUrl:       (url)    => set({ shareUrl: url }),
       reset: () =>
         set({
           selectedMatch: null,
@@ -80,10 +75,10 @@ export const useAppStore = create<AppState>()(
         }),
     }),
     {
-      name: "fifa360-store",
+      name: "matchday-store-v2",
       partialize: (state) => ({
         preferences: state.preferences,
-        notificationPrefs: state.notificationPrefs,
+        fanPrefs:    state.fanPrefs,
         selectedMatch: state.selectedMatch,
       }),
     }

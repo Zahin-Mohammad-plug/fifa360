@@ -1,264 +1,332 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import { useAppStore } from "@/store/appStore";
-import { VENUES } from "@/data/venues";
-import { MapView } from "@/components/MapView";
-import { SharePlanModal } from "@/components/SharePlanModal";
 import { MATCHES } from "@/data/matches";
-import { RouteInfo, Venue } from "@/types";
-import { getDepartureTime, getMinutesUntilDeparture } from "@/lib/shareLink";
-import { Navigation, Car, Footprints, Train, Clock, Share2, ChevronDown } from "lucide-react";
+import { getVenuesForMatch } from "@/data/venues";
+import { TRANSIT_PLANS } from "@/data/transit";
+import { Venue } from "@/types";
+import {
+  Navigation, Train, RefreshCw, ExternalLink, ChevronDown,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { NotificationSheet } from "@/components/NotificationSheet";
 
-type TransportMode = "walking" | "driving" | "transit";
-
-const MODE_CONFIG: Record<TransportMode, { icon: React.ElementType; label: string; color: string }> = {
-  walking: { icon: Footprints, label: "Walking", color: "#00ff88" },
-  driving: { icon: Car,        label: "Driving",  color: "#ffd740" },
-  transit: { icon: Train,      label: "Transit",  color: "#7c4dff" },
-};
-
-function DepartureCountdown({ minutes }: { minutes: number }) {
-  const color = minutes < 10 ? "#ff1744" : minutes < 20 ? "#ffd740" : "#00ff88";
-  return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full"
-         style={{ background: `${color}18`, border: `1px solid ${color}40`, boxShadow: `0 0 12px ${color}15` }}>
-      <Clock className="w-3.5 h-3.5" style={{ color }} />
-      <span className="text-sm font-black" style={{ color }}>
-        {minutes <= 0 ? "Leave now!" : `Leave in ${minutes}m`}
-      </span>
-    </div>
-  );
-}
+type RouteMode = "metro" | "rideshare";
 
 export default function RoutePage() {
-  const router = useRouter();
-  const { selectedVenue, selectedMatch, userLocation, setSelectedVenue, routeInfo, setRouteInfo, preferences, setPreferences } = useAppStore();
+  const { selectedMatch, selectedVenue, setSelectedVenue } = useAppStore();
 
-  const [shareOpen,        setShareOpen]        = useState(false);
-  const [notifOpen,        setNotifOpen]        = useState(false);
-  const [mode,             setMode]             = useState<TransportMode>((preferences.transportMode as TransportMode) ?? "walking");
-  const [departureMinutes, setDepartureMinutes] = useState<number | null>(null);
-  const [showVenuePicker,  setShowVenuePicker]  = useState(false);
-
-  const activeVenue = selectedVenue ?? VENUES[0];
   const activeMatch = selectedMatch ?? MATCHES.find((m) => m.status === "live") ?? MATCHES[0];
-  const origin      = userLocation ?? { lat: 40.7484, lng: -73.9967, label: "Times Square, New York" };
+  const venues = getVenuesForMatch(activeMatch.id);
+  const activeVenue: Venue | null = selectedVenue ?? venues[0] ?? null;
 
-  const handleRouteCalculated = useCallback((route: RouteInfo) => {
-    const dep = getDepartureTime(activeMatch.kickoff, route.etaMinutes, 15);
-    setRouteInfo({ ...route, departureTime: dep });
-    setDepartureMinutes(getMinutesUntilDeparture(dep));
-  }, [activeMatch.kickoff, setRouteInfo]);
+  const [mode, setMode]       = useState<RouteMode>("metro");
+  const [secs, setSecs]       = useState<number>(0);
+  const [updating, setUpdating] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
 
+  const transitData = activeVenue ? TRANSIT_PLANS[activeVenue.id] ?? null : null;
+
+  // Init countdown from venue
   useEffect(() => {
-    if (!routeInfo?.departureTime) return;
-    const tick = () => setDepartureMinutes(getMinutesUntilDeparture(routeInfo.departureTime));
-    const id = setInterval(tick, 60000);
-    tick();
-    return () => clearInterval(id);
-  }, [routeInfo?.departureTime]);
+    if (activeVenue) setSecs((activeVenue.departureCountdown ?? 15) * 60 - 10);
+  }, [activeVenue]);
 
-  const handleModeChange = (m: TransportMode) => {
-    setMode(m); setPreferences({ transportMode: m }); setRouteInfo(null);
+  // Tick down
+  useEffect(() => {
+    const id = setInterval(() => setSecs((p) => (p <= 1 ? 15 * 60 : p - 1)), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const formatCountdown = (s: number) => {
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}m ${String(r).padStart(2, "0")}s`;
   };
 
-  // Full-height page (no extra scroll)
-  const mapHeight = "calc(100dvh - var(--nav-height))";
+  const handleModeChange = (m: RouteMode) => {
+    setUpdating(true);
+    setMode(m);
+    setTimeout(() => setUpdating(false), 500);
+  };
+
+  const handleVenueSwitch = useCallback((v: Venue, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedVenue(v);
+    setShowPicker(false);
+    setUpdating(true);
+    setTimeout(() => setUpdating(false), 600);
+  }, [setSelectedVenue]);
+
+  const urgencyColor = secs < 300 ? "#ff3b30" : secs < 600 ? "#f59e0b" : "#ccff00";
 
   return (
-    <div className="page-enter flex" style={{ height: mapHeight, overflow: "hidden" }}>
-      {/* ── Map area (flex-1) ── */}
-      <div className="flex-1 relative overflow-hidden">
-        <MapView venue={activeVenue} origin={origin} onRouteCalculated={handleRouteCalculated} transportMode={mode} />
+    <div className="page-enter pb-4">
+      <div className="page-container pt-4 space-y-4">
 
-        {/* Floating origin/dest overlay */}
-        <div className="absolute top-4 left-4 space-y-2 max-w-[280px] pointer-events-none">
-          <div className="rounded-xl px-3 py-2.5 flex items-center gap-2"
-               style={{ background: "rgba(4,8,18,0.9)", border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(16px)" }}>
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: "#00b4ff", boxShadow: "0 0 6px #00b4ff" }} />
-            <span className="text-xs truncate" style={{ color: "rgba(255,255,255,0.65)" }}>{origin.label}</span>
+        {/* ── Transit header card ── */}
+        <div
+          className="rounded-2xl p-4"
+          style={{ background: "rgba(13,21,11,0.7)", border: "1px solid rgba(204,255,0,0.1)" }}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="label-mono flex items-center gap-1.5 mb-1">
+                <Navigation className="w-3 h-3 animate-live-dot" style={{ color: "#ccff00" }} />
+                Transit Departure Map
+              </div>
+              <h2 className="text-base font-extrabold truncate" style={{ color: "#f9fbf8" }}>
+                {activeVenue ? activeVenue.name : "No venue selected"}
+              </h2>
+              <p className="text-xs mt-0.5 truncate" style={{ color: "#83927d" }}>
+                {activeVenue ? activeVenue.address : "Select a venue from Discover"}
+              </p>
+            </div>
+
+            {/* Departure countdown chip */}
+            {activeVenue && (
+              <div
+                className="flex-shrink-0 rounded-xl text-center px-3 py-2"
+                style={{
+                  background: "rgba(7,12,4,0.9)",
+                  border: `1px solid ${urgencyColor}`,
+                  boxShadow: `0 0 12px ${urgencyColor}30`,
+                }}
+              >
+                <span className="block text-[9px] font-mono font-medium uppercase" style={{ color: "#83927d", letterSpacing: "0.1em" }}>
+                  Leave In
+                </span>
+                <span className="block text-xs font-mono font-bold mt-0.5" style={{ color: urgencyColor }}>
+                  {formatCountdown(secs)}
+                </span>
+              </div>
+            )}
           </div>
-          <div
-            className="rounded-xl px-3 py-2.5 flex items-center gap-2 pointer-events-auto cursor-pointer"
-            onClick={() => setShowVenuePicker((v) => !v)}
-            style={{ background: "rgba(4,8,18,0.9)", border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(16px)" }}
-          >
-            <div className="w-2 h-2 rounded-full shrink-0" style={{ background: "#ff1d78", boxShadow: "0 0 6px #ff1d78" }} />
-            <span className="text-xs flex-1 truncate text-white font-medium">{activeVenue.name}</span>
-            <ChevronDown className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(255,255,255,0.35)" }} />
+
+          {/* Venue picker */}
+          <div className="mt-3 relative">
+            <button
+              onClick={() => setShowPicker((v) => !v)}
+              className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-colors"
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#f9fbf8" }}
+            >
+              <span className="font-medium text-sm">{activeVenue?.name ?? "Pick a venue"}</span>
+              <ChevronDown className="w-4 h-4" style={{ color: "#83927d", transform: showPicker ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+            </button>
+
+            <AnimatePresence>
+              {showPicker && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  className="absolute top-full left-0 right-0 mt-1 rounded-xl overflow-hidden z-20"
+                  style={{ background: "rgba(11,18,8,0.97)", border: "1px solid rgba(204,255,0,0.15)", boxShadow: "0 8px 24px rgba(0,0,0,0.5)" }}
+                >
+                  {venues.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={(e) => handleVenueSwitch(v, e)}
+                      className="w-full text-left px-4 py-3 transition-colors"
+                      style={{
+                        borderBottom: "1px solid rgba(255,255,255,0.05)",
+                        background: activeVenue?.id === v.id ? "rgba(204,255,0,0.08)" : undefined,
+                      }}
+                    >
+                      <div className="text-sm font-bold" style={{ color: activeVenue?.id === v.id ? "#ccff00" : "#f9fbf8" }}>{v.name}</div>
+                      <div className="text-[10px] font-mono mt-0.5" style={{ color: "#83927d" }}>{v.departureCountdown} min · {v.routeTime}</div>
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </div>
 
-        {/* Venue picker dropdown */}
-        <AnimatePresence>
-          {showVenuePicker && (
-            <motion.div
-              initial={{ opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              className="absolute top-[116px] left-4 w-72 rounded-2xl overflow-hidden z-20"
-              style={{ background: "rgba(12,26,46,0.97)", border: "1px solid rgba(255,255,255,0.12)", backdropFilter: "blur(24px)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
+        {/* ── SVG Map ── */}
+        <div
+          className="relative w-full rounded-3xl overflow-hidden pitch-grid"
+          style={{ height: 280, background: "#090e05", border: "1px solid rgba(255,255,255,0.05)" }}
+        >
+          <svg className="absolute inset-0 w-full h-full" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="routeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%"   stopColor="#ccff00" stopOpacity="0.9" />
+                <stop offset="100%" stopColor="#22c55e" stopOpacity="0.4" />
+              </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+
+            {/* Road grid lines */}
+            <path d="M0 70 L450 70 M0 140 L450 140 M0 210 L450 210" stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
+            <path d="M60 0 L60 320 M150 0 L150 320 M250 0 L250 320 M350 0 L350 320" stroke="rgba(255,255,255,0.03)" strokeWidth="1"/>
+
+            {/* Shadow path */}
+            <path d="M 55 230 L 130 170 L 220 170 L 285 105 L 330 105" fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round"/>
+
+            {/* Active route — glowing dashed */}
+            <path d="M 55 230 L 130 170 L 220 170 L 285 105 L 330 105" fill="none" stroke="url(#routeGrad)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="10 6" className="animate-dash" filter="url(#glow)" />
+
+            {/* Walking segment to destination */}
+            <path d="M 330 105 L 360 105 L 360 65" fill="none" stroke="#ccff00" strokeWidth="1.5" strokeDasharray="4 4" strokeLinecap="round"/>
+
+            {/* Waypoint nodes */}
+            {[[130,170],[220,170],[285,105]].map(([cx,cy], i) => (
+              <g key={i}>
+                <circle cx={cx} cy={cy} r="4" fill="#182612" stroke="rgba(204,255,0,0.4)" strokeWidth="1.5"/>
+              </g>
+            ))}
+
+            {/* Origin — user */}
+            <circle cx="55" cy="230" r="12" fill="rgba(204,255,0,0.1)"/>
+            <circle cx="55" cy="230" r="5" fill="#ccff00"/>
+            <text x="55" y="255" fill="#ccff00" fontSize="8" fontFamily="JetBrains Mono,monospace" textAnchor="middle" fontWeight="700">YOU</text>
+
+            {/* Destination */}
+            <circle cx="360" cy="65" r="13" fill="rgba(255,59,48,0.18)"/>
+            <circle cx="360" cy="65" r="6" fill="#ff3b30"/>
+            <polygon points="360,60 364,69 356,69" fill="#fff"/>
+            <text x="360" y="48" fill="#f9fbf8" fontSize="8" fontFamily="Inter,sans-serif" textAnchor="middle" fontWeight="700">
+              {activeVenue ? activeVenue.name.split(" ").slice(0,2).join(" ") : "Venue"}
+            </text>
+          </svg>
+
+          {/* Compass */}
+          <div
+            className="absolute top-4 left-4 flex items-center justify-center rounded-lg text-[9px] font-mono"
+            style={{ width: 30, height: 30, background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.06)", color: "#83927d" }}
+          >
+            N 🧭
+          </div>
+
+          {/* Live score overlay */}
+          {activeMatch.status === "live" && (
+            <div
+              className="absolute bottom-4 right-4 flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-mono"
+              style={{ background: "rgba(7,12,4,0.9)", border: "1px solid rgba(204,255,0,0.25)", boxShadow: "0 0 12px rgba(204,255,0,0.1)" }}
             >
-              {VENUES.map((v) => {
-                const active = activeVenue.id === v.id;
+              <span className="w-1.5 h-1.5 rounded-full animate-live-dot" style={{ background: "#ff3b30" }}/>
+              <span className="font-bold" style={{ color: "#f9fbf8" }}>
+                {activeMatch.homeShort} {activeMatch.scoreHome}–{activeMatch.scoreAway} {activeMatch.awayShort}
+              </span>
+              <span style={{ color: "#83927d" }}>{activeMatch.minute}&apos;</span>
+            </div>
+          )}
+
+          {/* Mode switcher */}
+          <div
+            className="absolute bottom-4 left-4 flex gap-1 p-1 rounded-xl"
+            style={{ background: "rgba(7,12,4,0.9)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            {(["metro", "rideshare"] as RouteMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => handleModeChange(m)}
+                className="text-[9px] font-mono font-bold uppercase py-1 px-2 rounded-lg transition-colors cursor-pointer"
+                style={mode === m ? { background: "#ccff00", color: "#070c04" } : { color: "#83927d" }}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Transit steps ── */}
+        <div>
+          <div className="flex items-center justify-between mb-3 px-0.5">
+            <span className="label-mono">Transit Waypoints</span>
+            <span className="flex items-center gap-1 text-[11px] font-mono" style={{ color: "#ccff00" }}>
+              <Train className="w-3.5 h-3.5" />
+              {activeVenue?.routeTime ?? "N/A"}
+            </span>
+          </div>
+
+          {updating ? (
+            <div className="space-y-2">
+              {[1,2].map((k) => (
+                <div key={k} className="h-14 rounded-xl animate-shimmer" style={{ border: "1px solid rgba(255,255,255,0.05)" }} />
+              ))}
+            </div>
+          ) : activeVenue && transitData ? (
+            <div className="space-y-2.5">
+              {transitData.steps.map((step, i) => {
+                const typeStyle = {
+                  walk:   { bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.3)",  color: "#f59e0b",  emoji: "🏃" },
+                  train:  { bg: "rgba(204,255,0,0.08)",  border: "rgba(204,255,0,0.25)",  color: "#ccff00",  emoji: "🚆" },
+                  bus:    { bg: "rgba(59,130,246,0.1)",  border: "rgba(59,130,246,0.25)", color: "#3b82f6",  emoji: "🚌" },
+                  arrive: { bg: "rgba(255,59,48,0.1)",   border: "rgba(255,59,48,0.25)",  color: "#ff3b30",  emoji: "🏁" },
+                }[step.type];
+
                 return (
-                  <button
-                    key={v.id}
-                    onClick={() => { setSelectedVenue(v); setShowVenuePicker(false); setRouteInfo(null); }}
-                    className="w-full text-left px-4 py-3"
-                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)", background: active ? "rgba(0,180,255,0.08)" : undefined }}
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, x: -8 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: i * 0.06 }}
+                    className="flex items-center justify-between px-3 py-3 rounded-xl"
+                    style={{ background: "rgba(13,21,11,0.5)", border: "1px solid rgba(255,255,255,0.05)" }}
                   >
-                    <div className="text-sm font-bold" style={{ color: active ? "#00b4ff" : "rgba(255,255,255,0.8)" }}>{v.name}</div>
-                    <div className="text-xs mt-0.5" style={{ color: "rgba(255,255,255,0.3)" }}>{v.etaMinutes} min · {v.address}</div>
-                  </button>
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center text-sm flex-shrink-0"
+                        style={{ background: typeStyle.bg, border: `1px solid ${typeStyle.border}` }}
+                      >
+                        {typeStyle.emoji}
+                      </div>
+                      <div>
+                        <h4 className="text-xs font-bold leading-tight" style={{ color: "#f9fbf8" }}>{step.instruction}</h4>
+                        <p className="text-[10px] font-mono mt-0.5" style={{ color: "#83927d" }}>
+                          {{ walk: "Footpath", train: "Rail Line", bus: "Bus Shuttle", arrive: "Destination" }[step.type]}
+                        </p>
+                      </div>
+                    </div>
+                    {step.duration > 0 && (
+                      <span
+                        className="text-xs font-mono font-semibold px-2 py-0.5 rounded-lg flex-shrink-0"
+                        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#b8c5b4" }}
+                      >
+                        {step.duration}m
+                      </span>
+                    )}
+                  </motion.div>
                 );
               })}
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
 
-      {/* ── Right panel ── */}
-      <div className="w-80 xl:w-96 shrink-0 flex flex-col border-l overflow-y-auto"
-           style={{
-             borderColor: "rgba(255,255,255,0.08)",
-             background: "rgba(7,16,30,0.98)",
-             backdropFilter: "blur(24px)",
-           }}>
-        {/* Panel header */}
-        <div className="px-5 pt-5 pb-4 border-b" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
-          <div className="flex items-center justify-between mb-1">
-            <div>
-              <div className="text-[10px] font-bold tracking-[0.2em] uppercase"
-                   style={{ color: "rgba(124,77,255,0.7)" }}>FIFA 360</div>
-              <div className="text-xl font-black text-white leading-tight">Route Planner</div>
-            </div>
-            {departureMinutes !== null && (
-              <motion.div initial={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }}>
-                <DepartureCountdown minutes={departureMinutes} />
-              </motion.div>
-            )}
-          </div>
-        </div>
-
-        {/* Transport mode */}
-        <div className="px-5 py-4 border-b" style={{ borderColor: "rgba(255,255,255,0.06)" }}>
-          <div className="text-[10px] font-black uppercase tracking-[0.18em] mb-3"
-               style={{ color: "rgba(255,255,255,0.3)" }}>Transport Mode</div>
-          <div className="flex flex-col gap-2">
-            {(Object.keys(MODE_CONFIG) as TransportMode[]).map((m) => {
-              const { icon: Icon, label, color } = MODE_CONFIG[m];
-              const active = mode === m;
-              return (
-                <motion.button
-                  key={m}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => handleModeChange(m)}
-                  className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all"
-                  style={active ? {
-                    background: `${color}15`, border: `1px solid ${color}35`, color,
-                  } : {
-                    background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.4)",
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    const idx = venues.findIndex((v) => v.id === activeVenue.id);
+                    setSelectedVenue(venues[(idx + 1) % venues.length]);
                   }}
+                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-xs font-bold transition-colors"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)", color: "#b8c5b4" }}
                 >
-                  <Icon className="w-4 h-4" />
-                  {label}
-                </motion.button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Route info */}
-        <div className="px-5 py-5 flex-1">
-          <AnimatePresence mode="wait">
-            {routeInfo ? (
-              <motion.div key="route" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, ease: [0.22,1,0.36,1] }} className="space-y-5">
-                {/* Stats */}
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { label: "ETA", value: `${routeInfo.etaMinutes}`, unit: "min", color: "#00b4ff" },
-                    { label: "Distance", value: `${routeInfo.distanceKm}`, unit: "km", color: "#7c4dff" },
-                    { label: "Depart", value: routeInfo.departureTime, unit: "", color: "#ffd740" },
-                  ].map(({ label, value, unit, color }) => (
-                    <div key={label} className="rounded-xl p-3 text-center"
-                         style={{ background: `${color}0a`, border: `1px solid ${color}20` }}>
-                      <div className="text-[10px] font-bold uppercase tracking-wider mb-1"
-                           style={{ color: "rgba(255,255,255,0.35)" }}>{label}</div>
-                      <div className="font-black leading-none" style={{ color, fontSize: unit ? "22px" : "16px" }}>
-                        {value}
-                      </div>
-                      {unit && <div className="text-[10px] mt-0.5" style={{ color: "rgba(255,255,255,0.35)" }}>{unit}</div>}
-                    </div>
-                  ))}
-                </div>
-
-                {/* Steps */}
-                {routeInfo.steps && routeInfo.steps.length > 0 && (
-                  <div className="space-y-1.5">
-                    {routeInfo.steps.map((step, i) => (
-                      <div key={i} className="flex items-start gap-2 text-xs"
-                           style={{ color: "rgba(255,255,255,0.45)" }}>
-                        <span className="font-mono mt-0.5 shrink-0" style={{ color: "rgba(0,180,255,0.5)" }}>{i + 1}.</span>
-                        <span>{step}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Navigation icon row */}
-                <div className="flex items-center justify-center py-2">
-                  <Navigation className="w-5 h-5" style={{ color: "#00b4ff", opacity: 0.5 }} />
-                </div>
-
-                {/* CTAs */}
-                <div className="space-y-2.5">
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setShareOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm"
-                    style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)" }}
-                  >
-                    <Share2 className="w-4 h-4" /> Share Plan
-                  </motion.button>
-                  <motion.button
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setNotifOpen(true)}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-black text-sm"
-                    style={{ background: "linear-gradient(135deg, #00b4ff 0%, #0066ff 100%)", color: "#fff", boxShadow: "0 4px 20px rgba(0,102,255,0.4)" }}
-                  >
-                    Set Alerts
-                  </motion.button>
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div key="calc" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                          className="flex flex-col items-center justify-center h-40 gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                     style={{ background: "rgba(0,180,255,0.1)", border: "1px solid rgba(0,180,255,0.2)" }}>
-                  <Navigation className="w-5 h-5 animate-pulse" style={{ color: "#00b4ff" }} />
-                </div>
-                <div className="text-sm font-bold text-center" style={{ color: "rgba(255,255,255,0.35)" }}>
-                  Calculating route…
-                </div>
-                <div className="text-xs text-center" style={{ color: "rgba(255,255,255,0.2)" }}>
-                  to {activeVenue.name}
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+                  <RefreshCw className="w-4 h-4" style={{ color: "#ccff00" }} /> Alternate Venue
+                </button>
+                <button
+                  className="flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl text-xs font-extrabold transition-colors"
+                  style={{ background: "#ccff00", color: "#070c04" }}
+                >
+                  <ExternalLink className="w-4 h-4" /> Sync Plans
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className="rounded-xl py-8 px-4 text-center"
+              style={{ background: "rgba(13,21,11,0.4)", border: "1px solid rgba(255,255,255,0.05)" }}
+            >
+              <Navigation className="w-6 h-6 mx-auto mb-2 animate-live-dot" style={{ color: "#ccff00" }} />
+              <p className="text-xs" style={{ color: "#83927d" }}>
+                Select a fixture and venue on Discover to plot your route.
+              </p>
+            </div>
+          )}
         </div>
       </div>
-
-      {routeInfo && (
-        <SharePlanModal open={shareOpen} onClose={() => setShareOpen(false)} match={activeMatch} venue={activeVenue} route={routeInfo} />
-      )}
-      <NotificationSheet open={notifOpen} onClose={() => { setNotifOpen(false); router.push("/live"); }} />
     </div>
   );
 }

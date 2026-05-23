@@ -33,6 +33,28 @@ export interface Venue {
   imageUrl?: string;
   capacity?: number;
   rsvpRequired?: boolean;
+
+  /* Design-spec additions */
+  confidence: number;          // 0-100 atmosphere match %
+  rating: number;              // e.g. 4.8
+  density: "Low" | "Medium" | "High" | "Packed";
+  affiliation: string;         // e.g. "Argentina Supporters Club"
+  routeTime: string;           // e.g. "14 min via Metro"
+  departureCountdown: number;  // minutes until you should leave
+  conciergeInsight: string;    // one-line AI concierge tip
+  insights: string[];          // bullet-point insights
+}
+
+export interface TransitStep {
+  instruction: string;
+  duration: number;
+  type: "walk" | "train" | "bus" | "arrive";
+}
+
+export interface TransitPlan {
+  venueId: string;
+  totalTime: number;
+  steps: TransitStep[];
 }
 
 export interface MatchEvent {
@@ -49,9 +71,15 @@ export interface Match {
   awayTeam: string;
   homeFlag: string;
   awayFlag: string;
+  homeShort: string;   // 3-letter code e.g. "ARG"
+  awayShort: string;
+  homeColor: string;   // primary team color hex
+  awayColor: string;
   kickoff: string;
+  time: string;        // display time e.g. "20:00"
   venueCity: string;
   venueName: string;
+  league: string;      // short display label e.g. "Group B"
   status: "upcoming" | "live" | "halftime" | "finished";
   scoreHome: number;
   scoreAway: number;
@@ -60,6 +88,7 @@ export interface Match {
   nextMatchId?: string;
   tournament: string;
   round: string;
+  isLive?: boolean;    // convenience flag
 }
 
 export interface UserPreferences {
@@ -69,6 +98,14 @@ export interface UserPreferences {
   indoorOutdoor: "indoor" | "outdoor" | "any";
   budgetSensitivity: 1 | 2 | 3 | 4;
   transportMode: "driving" | "walking" | "transit";
+}
+
+export interface FanPreferences {
+  favoriteTeam: string;
+  kickoffAlerts: boolean;
+  scoreUpdates: boolean;
+  routeReminders: boolean;
+  crowdWarnings: boolean;
 }
 
 export interface RouteInfo {
