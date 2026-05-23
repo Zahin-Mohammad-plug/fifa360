@@ -1,43 +1,40 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Design Tokens ────────────────────────────────────────────────────── */
+/* ─── Design Tokens (FIFA Template Palette) ──────────────────────────────── */
 @theme inline {
-  --color-neon:        #ccff00;
-  --color-neon-dim:    #a3cc00;
-  --color-bg:          #060b03;
-  --color-pitch:       #0b1309;
-  --color-pitch-light: #16240e;
-  --color-live:        #ff3b30;
-  --color-amber:       #f59e0b;
-  --color-blue-accent: #60a5fa;
-  --color-text:        #f5f9f3;
-  --color-text-dim:    #c5d0c1;
-  --color-sage:        #7a8a75;
+  --color-fifa-blue:   #003DA5;
+  --color-fifa-red:    #E8112D;
+  --color-fifa-gold:   #FFD700;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Courier New", monospace;
+  --color-bg:          #030712;
+  --color-surface:     #1f2937;
+  --color-surface-2:   #111827;
+  --color-border:      #374151;
 
-  --nav-height:        58px;
-  --bottom-nav-height: 72px;
+  --color-text:        #f9fafb;
+  --color-text-dim:    #9ca3af;
+  --color-text-mute:   #6b7280;
 
-  /* Tailwind compat */
-  --color-background:           #060b03;
-  --color-foreground:           #f5f9f3;
-  --color-card:                 #0b1309;
-  --color-card-foreground:      #f5f9f3;
-  --color-primary:              #ccff00;
-  --color-primary-foreground:   #060b03;
-  --color-secondary:            #16240e;
-  --color-secondary-foreground: #7a8a75;
-  --color-muted:                #16240e;
-  --color-muted-foreground:     #7a8a75;
-  --color-destructive:          #ff3b30;
-  --color-border:               rgba(204,255,0,0.07);
-  --color-input:                rgba(255,255,255,0.05);
-  --color-ring:                 #ccff00;
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", "Courier New", monospace;
+
+  --bottom-nav-height: 64px;
+
+  --color-background:           #030712;
+  --color-foreground:           #f9fafb;
+  --color-card:                 #1f2937;
+  --color-card-foreground:      #f9fafb;
+  --color-primary:              #2563eb;
+  --color-primary-foreground:   #ffffff;
+  --color-secondary:            #374151;
+  --color-secondary-foreground: #d1d5db;
+  --color-muted:                #1f2937;
+  --color-muted-foreground:     #9ca3af;
+  --color-destructive:          #ef4444;
+  --color-input:                #1f2937;
+  --color-ring:                 #2563eb;
   --radius:                     0.875rem;
   --radius-sm:   calc(var(--radius) * 0.55);
   --radius-md:   calc(var(--radius) * 0.75);
@@ -51,242 +48,43 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 html, body {
-  margin: 0; padding: 0;
-  background: #060b03;
-  color: #f5f9f3;
+  margin: 0;
+  padding: 0;
+  background: #030712;
+  color: #f9fafb;
   font-family: var(--font-sans);
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-}
-
-/* ─── App Shell ──────────────────────────────────────────────────────────── */
-.main-content {
-  padding-top: var(--nav-height);
-  padding-bottom: var(--bottom-nav-height);
   min-height: 100dvh;
 }
 
+/* ─── Responsive Webapp Container ────────────────────────────────────────── */
+/*
+ * The template was hard-locked to 430px on <body>. We instead use an opt-in
+ * container that flows up to 1240px on desktop so the same UI works as a webapp.
+ * Pages just wrap their content in <div className="page-container"> and the
+ * mobile-first internal layouts (px-4, max-w-* on cards, etc.) flow naturally.
+ */
 .page-container {
   width: 100%;
   max-width: 1240px;
   margin: 0 auto;
-  padding: 0 clamp(1rem, 2.2vw, 1.5rem);
+  padding-inline: clamp(1rem, 2.2vw, 1.5rem);
 }
 
-/* ─── Liquid Glass System ────────────────────────────────────────────────── */
+/* ─── Utilities ──────────────────────────────────────────────────────────── */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Standard panel — nav bars, section containers */
-.glass-panel {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.028) 0%, transparent 45%),
-    rgba(13, 21, 10, 0.74);
-  backdrop-filter: blur(20px) saturate(1.45);
-  -webkit-backdrop-filter: blur(20px) saturate(1.45);
-  border: 1px solid rgba(255,255,255,0.065);
-  border-top-color: rgba(255,255,255,0.1);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.045);
-}
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom, 16px); }
 
-/* Heavy glass — top/bottom nav, full-bleed overlays */
-.glass-panel-heavy {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.032) 0%, transparent 50%),
-    rgba(6, 11, 3, 0.93);
-  backdrop-filter: blur(30px) saturate(1.55);
-  -webkit-backdrop-filter: blur(30px) saturate(1.55);
-  border: 1px solid rgba(255,255,255,0.058);
-  border-top-color: rgba(255,255,255,0.09);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
-}
+/* ─── Animations (carried over from template) ────────────────────────────── */
+@keyframes livePulse  { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+@keyframes slideUp    { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@keyframes fadeIn     { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pageEnter  { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-/* Card surface — content cards */
-.glass-card {
-  background: rgba(16, 26, 12, 0.58);
-  border: 1px solid rgba(255,255,255,0.045);
-  transition: background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
-}
-.glass-card:hover {
-  background: rgba(22, 35, 17, 0.75);
-  border-color: rgba(204,255,0,0.13);
-  box-shadow: 0 6px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.04);
-}
-
-/* Active card */
-.glass-card-active {
-  background:
-    linear-gradient(180deg, rgba(204,255,0,0.035) 0%, transparent 35%),
-    rgba(22, 36, 17, 0.88) !important;
-  border-color: rgba(204,255,0,0.3) !important;
-  box-shadow: 0 0 0 1px rgba(204,255,0,0.08), 0 14px 40px rgba(0,0,0,0.5),
-              inset 0 1px 0 rgba(204,255,0,0.07) !important;
-}
-
-/* Premium hero glass — score header, fan badge */
-.glass-premium {
-  background:
-    linear-gradient(145deg, rgba(255,255,255,0.045) 0%, rgba(204,255,0,0.012) 60%, transparent 100%),
-    rgba(12, 20, 9, 0.82);
-  backdrop-filter: blur(26px) saturate(1.6);
-  -webkit-backdrop-filter: blur(26px) saturate(1.6);
-  border: 1px solid rgba(255,255,255,0.07);
-  border-top-color: rgba(255,255,255,0.13);
-  box-shadow:
-    inset 0 1px 0 rgba(255,255,255,0.07),
-    0 28px 56px rgba(0,0,0,0.45);
-}
-
-/* Inset / well */
-.glass-inset {
-  background: rgba(5, 9, 3, 0.7);
-  border: 1px solid rgba(255,255,255,0.04);
-  box-shadow: inset 0 2px 6px rgba(0,0,0,0.35);
-}
-
-/* ─── Typography Utilities ───────────────────────────────────────────────── */
-.label-mono {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 600;
-  letter-spacing: 0.17em;
-  text-transform: uppercase;
-  color: #7a8a75;
-}
-.score-mono {
-  font-family: var(--font-mono);
-  font-weight: 700;
-  line-height: 1;
-}
-.gradient-text-neon {
-  background: linear-gradient(120deg, #ccff00 0%, #a3e800 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* ─── Chip Palette ───────────────────────────────────────────────────────── */
-.chip {
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 2px 8px; border-radius: 9999px;
-  font-size: 9px; font-family: var(--font-mono);
-  font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
-}
-.chip-neon  { background: rgba(204,255,0,0.11); color: #ccff00;  border: 1px solid rgba(204,255,0,0.28); }
-.chip-live  { background: rgba(255,59,48,0.11);  color: #ff5e54;  border: 1px solid rgba(255,59,48,0.28); }
-.chip-amber { background: rgba(245,158,11,0.11); color: #fbbf24;  border: 1px solid rgba(245,158,11,0.28); }
-.chip-blue  { background: rgba(96,165,250,0.11); color: #93c5fd;  border: 1px solid rgba(96,165,250,0.28); }
-.chip-sage  { background: rgba(255,255,255,0.05); color: #7a8a75; border: 1px solid rgba(255,255,255,0.08); }
-.chip-green { background: rgba(34,197,94,0.11); color: #86efac;   border: 1px solid rgba(34,197,94,0.28); }
-.chip-purple{ background: rgba(167,139,250,0.11); color: #c4b5fd; border: 1px solid rgba(167,139,250,0.28); }
-
-/* ─── Rank Badge ─────────────────────────────────────────────────────────── */
-.rank-badge {
-  display: flex; align-items: center; justify-content: center;
-  width: 22px; height: 22px; border-radius: 7px;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-  background: rgba(204,255,0,0.1); border: 1px solid rgba(204,255,0,0.22);
-  color: #ccff00; flex-shrink: 0;
-}
-
-/* ─── Neon Glow Effects ──────────────────────────────────────────────────── */
-.neon-glow {
-  box-shadow: 0 0 16px rgba(204,255,0,0.5), 0 0 40px rgba(204,255,0,0.16);
-}
-.neon-text  { color: #ccff00; text-shadow: 0 0 16px rgba(204,255,0,0.5); }
-.live-glow  { box-shadow: 0 0 14px rgba(255,59,48,0.55); }
-.amber-glow { box-shadow: 0 0 12px rgba(245,158,11,0.45); }
-
-/* ─── Separators ─────────────────────────────────────────────────────────── */
-.neon-separator {
-  height: 1px;
-  background: linear-gradient(90deg, transparent 0%, rgba(204,255,0,0.2) 50%, transparent 100%);
-}
-
-/* ─── Animations ─────────────────────────────────────────────────────────── */
-@keyframes neon-pulse {
-  0%,100% { opacity: 1;    box-shadow: 0 0 14px rgba(204,255,0,0.65); }
-  50%      { opacity: 0.55; box-shadow: 0 0 4px rgba(204,255,0,0.2); }
-}
-@keyframes live-pulse  { 0%,100%{opacity:1;}  50%{opacity:0.3;} }
-@keyframes shimmer     { 0%{background-position:-200% 0} 100%{background-position:200% 0} }
-@keyframes float-ball  { 0%,100%{transform:translateY(0) rotate(0deg);} 50%{transform:translateY(-8px) rotate(180deg);} }
-@keyframes dash-march  { to { stroke-dashoffset: -40; } }
-@keyframes ping-dot    { 0%{transform:scale(1);opacity:1;} 75%,100%{transform:scale(2.4);opacity:0;} }
-@keyframes count-up    { from{transform:translateY(8px);opacity:0;} to{transform:translateY(0);opacity:1;} }
-@keyframes slide-up    { from{transform:translateY(14px);opacity:0;} to{transform:translateY(0);opacity:1;} }
-@keyframes fade-in     { from{opacity:0;} to{opacity:1;} }
-@keyframes glow-breath { 0%,100%{box-shadow:0 0 20px rgba(204,255,0,0.18);} 50%{box-shadow:0 0 40px rgba(204,255,0,0.42);} }
-@keyframes score-pop   { 0%{transform:scale(1.5);opacity:0;} 60%{transform:scale(0.94);} 100%{transform:scale(1);opacity:1;} }
-
-.neon-pulse-live     { animation: neon-pulse    2s    infinite ease-in-out; }
-.animate-live-dot    { animation: live-pulse    1.4s  infinite ease-in-out; }
-.animate-float       { animation: float-ball    3s    infinite ease-in-out; }
-.animate-dash        { animation: dash-march    3s    linear   infinite; }
-.animate-count-up    { animation: count-up      0.4s  cubic-bezier(0.22,1,0.36,1) both; }
-.animate-slide-up    { animation: slide-up      0.35s cubic-bezier(0.22,1,0.36,1) both; }
-.animate-fade-in     { animation: fade-in       0.3s  ease both; }
-.animate-glow-breath { animation: glow-breath   3s    ease infinite; }
-.animate-score-pop   { animation: score-pop     0.5s  cubic-bezier(0.22,1,0.36,1) both; }
-
-/* ─── Skeleton Shimmer ───────────────────────────────────────────────────── */
-.animate-shimmer {
-  background: linear-gradient(
-    90deg,
-    rgba(16,26,12,0.5) 25%,
-    rgba(30,48,22,0.5) 50%,
-    rgba(16,26,12,0.5) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite linear;
-}
-
-/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-
-/* ─── Toggle Switch ──────────────────────────────────────────────────────── */
-.toggle-track {
-  position: relative;
-  display: inline-flex; align-items: center;
-  height: 26px; width: 46px;
-  border-radius: 9999px; cursor: pointer;
-  transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
-  border: 1px solid rgba(255,255,255,0.1);
-  background: rgba(255,255,255,0.055);
-  outline: none; padding: 3px; flex-shrink: 0;
-}
-.toggle-track.active {
-  background: rgba(204,255,0,0.22);
-  border-color: rgba(204,255,0,0.55);
-  box-shadow: 0 0 14px rgba(204,255,0,0.28), inset 0 0 8px rgba(204,255,0,0.07);
-}
-.toggle-thumb {
-  height: 18px; width: 18px; border-radius: 9999px;
-  background: rgba(255,255,255,0.88);
-  box-shadow: 0 1px 4px rgba(0,0,0,0.5);
-  transition: transform 0.22s cubic-bezier(0.22,1,0.36,1), background 0.22s ease;
-  transform: translateX(0); flex-shrink: 0;
-}
-.toggle-track.active .toggle-thumb {
-  transform: translateX(20px);
-  background: #ccff00;
-  box-shadow: 0 0 10px rgba(204,255,0,0.65);
-}
-
-/* ─── Page Enter ─────────────────────────────────────────────────────────── */
-.page-enter { animation: slide-up 0.3s cubic-bezier(0.22,1,0.36,1) both; }
-
-/* ─── Pitch Grid ─────────────────────────────────────────────────────────── */
-.pitch-grid {
-  background-image: radial-gradient(rgba(204,255,0,0.032) 1px, transparent 1px);
-  background-size: 18px 18px;
-}
-
-/* ─── Density Bar ────────────────────────────────────────────────────────── */
-.density-bar { border-radius: 3px; transition: opacity 0.2s ease; }
-
-/* ─── Step Connector ─────────────────────────────────────────────────────── */
-.step-connector {
-  width: 1px;
-  background: linear-gradient(to bottom, rgba(204,255,0,0.25), rgba(255,255,255,0.06));
-}
+.live-pulse { animation: livePulse 1.5s ease-in-out infinite; }
+.slide-up   { animation: slideUp 0.3s ease-out; }
+.fade-in    { animation: fadeIn 0.4s ease-out; }
+.page-enter { animation: pageEnter 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }

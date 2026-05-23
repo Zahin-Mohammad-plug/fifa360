@@ -1,10 +1,6 @@
 import { NextResponse } from "next/server";
-import { MATCHES } from "@/data/matches";
+import { MOCK_LIVE_STATE } from "@/lib/mock-data";
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const matchId = searchParams.get("id");
-  const match = matchId ? MATCHES.find((m) => m.id === matchId) : MATCHES.find((m) => m.status === "live");
-  if (!match) return NextResponse.json({ error: "match not found" }, { status: 404 });
-  return NextResponse.json({ match });
+export async function GET() {
+  return NextResponse.json(MOCK_LIVE_STATE);
 }
