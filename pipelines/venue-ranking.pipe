@@ -1,0 +1,38 @@
+{
+  "name": "venue-ranking",
+  "description": "Rank venues by semantic similarity to a fan profile, then explain the top picks.",
+  "input_schema": "VenueRankRequest",
+  "output_schema": "RankedVenueList",
+  "nodes": [
+    { "id": "input", "type": "source", "schema": "VenueRankRequest" },
+    {
+      "id": "embed_profile",
+      "type": "llm_embed",
+      "provider": "gmi",
+      "model": "BAAI/bge-large-en-v1.5",
+      "inputs": ["input.profile"]
+    },
+    {
+      "id": "embed_venues",
+      "type": "llm_embed",
+      "provider": "gmi",
+      "model": "BAAI/bge-large-en-v1.5",
+      "inputs": ["input.venues"]
+    },
+    {
+      "id": "score",
+      "type": "cosine_similarity",
+      "inputs": ["embed_profile", "embed_venues"],
+      "config": { "normalize": true, "blend": ["atmosphere", "budget", "team_loyalty"] }
+    },
+    {
+      "id": "reason",
+      "type": "llm",
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "inputs": ["score"],
+      "prompt": "In one sentence, explain why this venue matches this fan's profile: {profile} -> {venue}"
+    },
+    { "id": "output", "type": "sink", "schema": "RankedVenueList", "inputs": ["reason"] }
+  ]
+}

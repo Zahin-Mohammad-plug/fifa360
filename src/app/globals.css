@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --bg-0: #05070f;
+  --bg-1: #0a0f1f;
+}
+
+@layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply text-white antialiased;
+    background-color: var(--bg-0);
+    background-image:
+      radial-gradient(1200px 600px at 50% -10%, rgba(16, 185, 129, 0.10), transparent 60%),
+      radial-gradient(900px 500px at 100% 0%, rgba(14, 165, 233, 0.10), transparent 55%),
+      radial-gradient(800px 500px at 0% 100%, rgba(245, 158, 11, 0.08), transparent 55%);
+    background-attachment: fixed;
+    min-height: 100dvh;
+    overscroll-behavior-y: none;
+  }
+  ::selection {
+    background: rgba(16, 185, 129, 0.35);
+  }
+}
+
+@layer components {
+  .glass {
+    @apply border border-white/10 bg-white/[0.06] shadow-glass backdrop-blur-xl;
+  }
+  .glass-strong {
+    @apply border border-white/15 bg-white/[0.10] shadow-glass backdrop-blur-2xl;
+  }
+  .glass-subtle {
+    @apply border border-white/[0.07] bg-white/[0.03] backdrop-blur-md;
+  }
+  .glass-inset {
+    @apply border border-white/10 bg-black/20 backdrop-blur-sm;
+  }
+  .card-hover {
+    @apply transition-all duration-300 hover:border-white/20 hover:bg-white/[0.09] hover:shadow-glow-pitch;
+  }
+  .gradient-text {
+    @apply bg-gradient-to-r from-pitch-300 via-electric-300 to-trophy-300 bg-clip-text text-transparent;
+    background-size: 200% auto;
+  }
+  .gradient-text-animated {
+    @apply gradient-text animate-gradient-x;
+  }
+  .pressable {
+    @apply transition-transform duration-150 active:scale-[0.97];
+  }
+  .focus-ring {
+    @apply outline-none focus-visible:ring-2 focus-visible:ring-pitch-400/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent;
+  }
+}
+
+@layer utilities {
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .pb-safe {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5.5rem);
+  }
+  .text-balance {
+    text-wrap: balance;
+  }
+  .shimmer-bg {
+    background: linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0.04) 8%,
+      rgba(255, 255, 255, 0.12) 18%,
+      rgba(255, 255, 255, 0.04) 33%
+    );
+    background-size: 200% 100%;
+  }
+}
+
+/* Slim custom scrollbar for desktop preview */
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 9999px;
+}

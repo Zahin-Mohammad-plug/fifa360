@@ -1,0 +1,27 @@
+{
+  "name": "live-match",
+  "description": "Ingest the mock event stream and fan out to Haiku for plain-English descriptions.",
+  "input_schema": "MatchEventStream",
+  "output_schema": "LiveMatchState",
+  "nodes": [
+    { "id": "input", "type": "source", "schema": "MatchEventStream", "config": { "mode": "stream" } },
+    {
+      "id": "describe",
+      "type": "llm",
+      "provider": "anthropic",
+      "model": "claude-haiku-4-5-20251001",
+      "inputs": ["input.events"],
+      "fan_out": true,
+      "prompt": "Describe this football match event in 1-2 plain English sentences for a casual fan. Be vivid but concise. Event: {type} by {player} for {team} at minute {minute}. Current score: {homeTeam} {homeScore} - {awayScore} {awayTeam}."
+    },
+    {
+      "id": "tactics",
+      "type": "llm",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "inputs": ["describe"],
+      "prompt": "Summarize the current tactical situation in one sentence for the live dashboard."
+    },
+    { "id": "output", "type": "sink", "schema": "LiveMatchState", "inputs": ["describe", "tactics"] }
+  ]
+}

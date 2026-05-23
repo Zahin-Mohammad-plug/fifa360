@@ -1,0 +1,24 @@
+{
+  "name": "concierge",
+  "description": "Route fan messages through Claude Sonnet with venue/route/match tools.",
+  "input_schema": "ConciergeRequest",
+  "output_schema": "ConciergeReply",
+  "nodes": [
+    { "id": "input", "type": "source", "schema": "ConciergeRequest" },
+    {
+      "id": "agent",
+      "type": "llm_agent",
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514",
+      "inputs": ["input.messages"],
+      "system": "You are FIFA 360's matchday concierge. Be friendly, specific, and helpful. Keep responses under 3 sentences unless asked for more.",
+      "tools": [
+        { "name": "get_venue_details", "params": { "venueId": "string" } },
+        { "name": "get_route_to_venue", "params": { "venueId": "string", "mode": "string" } },
+        { "name": "get_match_info", "params": { "matchId": "string" } }
+      ],
+      "config": { "max_tool_iterations": 4 }
+    },
+    { "id": "output", "type": "sink", "schema": "ConciergeReply", "inputs": ["agent"] }
+  ]
+}
