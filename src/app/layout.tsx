@@ -3,6 +3,7 @@ import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { TopNav } from "@/components/TopNav";
 import { BottomNav } from "@/components/BottomNav";
+import { MatchPulseToast } from "@/components/MatchPulseToast";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,13 +20,13 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Matchday Concierge – FIFA World Cup 2026",
+  title: "FIFA 360 – FIFA World Cup 2026",
   description:
     "Find the best supporter venues, plan your route, get live scores and real-time alerts for every FIFA World Cup 2026 match.",
   manifest: "/manifest.json",
   icons: { apple: "/icon-192.png" },
   openGraph: {
-    title: "Matchday Concierge – FIFA World Cup 2026",
+    title: "FIFA 360 – FIFA World Cup 2026",
     description: "Find venues, plan routes, live scores, AI concierge for World Cup 2026.",
     type: "website",
   },
@@ -45,6 +46,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <div className="main-content">
           {children}
         </div>
+        <MatchPulseToast />
         <BottomNav />
       </body>
     </html>

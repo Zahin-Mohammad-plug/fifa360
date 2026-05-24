@@ -11,7 +11,7 @@ export default function NotFound() {
         className="text-[11px] font-mono font-bold tracking-[0.2em] uppercase mb-3"
         style={{ color: "rgba(204,255,0,0.6)" }}
       >
-        Matchday Concierge
+        FIFA 360
       </div>
       <h1 className="text-3xl font-black mb-3 tracking-tight" style={{ color: "#f9fbf8" }}>
         Page Not Found

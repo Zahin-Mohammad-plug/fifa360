@@ -8,9 +8,10 @@ import { getVenuesForMatch } from "@/data/venues";
 import { Venue, Match } from "@/types";
 import {
   Search, Compass, ShieldCheck, MapPin, Users, Flame,
-  ExternalLink, Star, AlertTriangle, ChevronDown, Clock, Zap,
+  Star, AlertTriangle, ChevronDown, Clock, Zap, ArrowDown, PhoneCall, Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { VoiceCallModal } from "@/components/VoiceCallModal";
 
 type Filter = "All" | "Verified Only" | "Near Me";
 
@@ -22,12 +23,13 @@ const FILTER_COLORS: Record<Filter, { text: string; bg: string; border: string }
 
 export default function DiscoverPage() {
   const router = useRouter();
-  const { selectedMatch, setSelectedMatch, setSelectedVenue } = useAppStore();
+  const { selectedMatch, setSelectedMatch, setSelectedVenue, preferences } = useAppStore();
 
-  const [query,      setQuery]      = useState("");
-  const [filter,     setFilter]     = useState<Filter>("All");
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [loading,    setLoading]    = useState(false);
+  const [query,           setQuery]           = useState("");
+  const [filter,          setFilter]          = useState<Filter>("All");
+  const [expandedId,      setExpandedId]      = useState<string | null>(null);
+  const [loading,         setLoading]         = useState(false);
+  const [voiceCallVenue,  setVoiceCallVenue]  = useState<Venue | null>(null);
 
   const activeMatch = selectedMatch ?? MATCHES.find((m) => m.status === "live") ?? MATCHES[0];
   const venues = getVenuesForMatch(activeMatch.id);
@@ -42,6 +44,15 @@ export default function DiscoverPage() {
     if (filter === "Near Me")       return hit && (v.distanceKm ?? 99) <= 1.5;
     return hit;
   });
+
+  const activeRsvpVenue: Venue | null = (() => {
+    if (voiceCallVenue) return voiceCallVenue;
+    if (expandedId) {
+      const v = venues.find((x) => x.id === expandedId);
+      if (v) return v;
+    }
+    return filtered[0] ?? venues[0] ?? null;
+  })();
 
   useEffect(() => {
     setLoading(true);
@@ -60,6 +71,11 @@ export default function DiscoverPage() {
     setSelectedVenue(v);
     router.push("/route");
   }, [setSelectedVenue, router]);
+
+  const handleRsvpAi = useCallback((v: Venue, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setVoiceCallVenue(v);
+  }, []);
 
   const densityColor = (d: string) => {
     if (d === "Packed")  return "#ff3b30";
@@ -186,6 +202,36 @@ export default function DiscoverPage() {
               </motion.button>
             );
           })}
+        </div>
+
+        {/* ══ Subtle "Check Venues" jump-link (sits under Matches) ══ */}
+        <div className="flex justify-end -mt-1">
+          <button
+            onClick={() =>
+              document.getElementById("venue_list_anchor")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className="group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10.5px] font-mono font-medium transition-colors cursor-pointer select-none"
+            style={{
+              background: "rgba(204,255,0,0.04)",
+              border: "1px solid rgba(204,255,0,0.14)",
+              color: "#c5d0c1",
+              letterSpacing: "0.04em",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(204,255,0,0.07)";
+              e.currentTarget.style.borderColor = "rgba(204,255,0,0.22)";
+              e.currentTarget.style.color = "#ccff00";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(204,255,0,0.04)";
+              e.currentTarget.style.borderColor = "rgba(204,255,0,0.14)";
+              e.currentTarget.style.color = "#c5d0c1";
+            }}
+            aria-label="Jump to verified venues for this match"
+          >
+            Check venues
+            <ArrowDown className="w-3 h-3 transition-transform group-hover:translate-y-0.5" style={{ color: "#ccff00" }} />
+          </button>
         </div>
 
         {/* ══ Search + Filters ══ */}
@@ -326,6 +372,7 @@ export default function DiscoverPage() {
         ) : (
           /* ══ Venue Cards ══ */
           <div className="space-y-3">
+            <div id="venue_list_anchor" style={{ scrollMarginTop: "calc(var(--nav-height) + 12px)" }} />
             {filtered.map((venue, idx) => {
               const isOpen = expandedId === venue.id;
               const dc     = densityColor(venue.density);
@@ -632,24 +679,77 @@ export default function DiscoverPage() {
         )}
       </div>
 
-      {/* ══ FAB ══ */}
-      <div className="fixed bottom-[calc(var(--bottom-nav-height)+14px)] right-4 z-40">
-        <motion.button
-          whileTap={{ scale: 0.93 }}
-          onClick={() => document.getElementById("venue_list_anchor")?.scrollIntoView({ behavior: "smooth" })}
-          className="flex items-center gap-2 px-5 py-3 rounded-full text-xs font-extrabold shadow-2xl cursor-pointer select-none"
-          style={{
-            background: "#ccff00",
-            color: "#060b03",
-            boxShadow: "0 0 24px rgba(204,255,0,0.4), 0 8px 20px rgba(0,0,0,0.3)",
-          }}
+      {/* ══ RSVP AI · centre-bottom console ══ */}
+      {activeRsvpVenue && (
+        <div
+          className="fixed inset-x-0 z-40 flex justify-center pointer-events-none px-4"
+          style={{ bottom: "calc(var(--bottom-nav-height) + 16px)" }}
         >
-          <ExternalLink className="w-4 h-4" />
-          Check Venues
-        </motion.button>
-      </div>
+          <motion.button
+            initial={{ y: 22, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+            whileTap={{ scale: 0.96 }}
+            onClick={() => setVoiceCallVenue(activeRsvpVenue)}
+            className="pointer-events-auto group flex items-center gap-2.5 pl-2.5 pr-4 py-2 rounded-full select-none cursor-pointer"
+            style={{
+              background:
+                "linear-gradient(135deg, rgba(204,255,0,0.2) 0%, rgba(10,18,7,0.95) 100%)",
+              border: "1px solid rgba(204,255,0,0.4)",
+              boxShadow:
+                "0 14px 32px rgba(0,0,0,0.55), 0 0 24px rgba(204,255,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)",
+              backdropFilter: "blur(22px) saturate(1.5)",
+              WebkitBackdropFilter: "blur(22px) saturate(1.5)",
+              maxWidth: "calc(100% - 32px)",
+            }}
+            aria-label={`Open AI voice RSVP for ${activeRsvpVenue.name}`}
+          >
+            <span
+              className="relative flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0"
+              style={{
+                background: "rgba(204,255,0,0.18)",
+                border: "1px solid rgba(204,255,0,0.42)",
+              }}
+            >
+              <PhoneCall className="w-3.5 h-3.5" style={{ color: "#ccff00" }} />
+              <span
+                className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
+                style={{
+                  background: "#ccff00",
+                  boxShadow: "0 0 8px #ccff00",
+                  animation: "live-pulse 1.6s infinite",
+                }}
+              />
+            </span>
+            <div className="flex flex-col items-start leading-tight min-w-0">
+              <span
+                className="text-[10px] font-mono font-bold uppercase"
+                style={{ color: "#ccff00", letterSpacing: "0.16em" }}
+              >
+                RSVP AI
+              </span>
+              <span
+                className="text-[9.5px] font-mono truncate max-w-[180px]"
+                style={{ color: "#9aaa93", letterSpacing: "0.04em" }}
+              >
+                {activeRsvpVenue.name}
+              </span>
+            </div>
+            <Sparkles
+              className="w-3.5 h-3.5 ml-1 flex-shrink-0 transition-transform group-hover:scale-110"
+              style={{ color: "#ccff00", opacity: 0.85 }}
+            />
+          </motion.button>
+        </div>
+      )}
 
-      <div id="venue_list_anchor" style={{ position: "absolute", top: 0 }} />
+      {/* ══ Voice-call RSVP modal (pipeline mount-point) ══ */}
+      <VoiceCallModal
+        venue={voiceCallVenue}
+        match={activeMatch}
+        partySize={preferences.partySize}
+        onClose={() => setVoiceCallVenue(null)}
+      />
     </div>
   );
 }

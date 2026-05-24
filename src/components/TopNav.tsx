@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, Trophy } from "lucide-react";
+import Image from "next/image";
+import { Bell } from "lucide-react";
 import { useAppStore } from "@/store/appStore";
 import { MATCHES } from "@/data/matches";
 
@@ -36,7 +37,7 @@ export function TopNav() {
         {/* ── Logo ── */}
         <div className="flex items-center gap-2.5 flex-shrink-0">
           <div
-            className="relative flex items-center justify-center rounded-xl"
+            className="relative flex items-center justify-center rounded-xl overflow-hidden"
             style={{
               width: 36, height: 36,
               background: "linear-gradient(135deg, rgba(204,255,0,0.22) 0%, rgba(10,18,7,0.9) 100%)",
@@ -44,7 +45,15 @@ export function TopNav() {
               boxShadow: "0 0 16px rgba(204,255,0,0.12), inset 0 1px 0 rgba(255,255,255,0.1)",
             }}
           >
-            <Trophy className="w-4 h-4" style={{ color: "#ccff00" }} />
+            <Image
+              src="/fifa360-logo.png"
+              alt="FIFA 360"
+              width={72}
+              height={72}
+              priority
+              className="w-9 h-9"
+              style={{ objectFit: "cover", objectPosition: "center 30%", transform: "scale(1.7)" }}
+            />
             <span
               className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
               style={{ background: "#ccff00", boxShadow: "0 0 6px #ccff00", animation: "ping-dot 2s infinite" }}
@@ -52,7 +61,7 @@ export function TopNav() {
           </div>
           <div className="leading-tight">
             <p className="text-[13px] font-extrabold tracking-tight leading-none" style={{ color: "#f5f9f3" }}>
-              MATCHDAY <span className="gradient-text-neon">CONCIERGE</span>
+              FIFA <span className="gradient-text-neon">360</span>
             </p>
             <p className="text-[9px] font-mono mt-0.5" style={{ color: "#7a8a75" }}>
               {utcTime ? `${utcTime} UTC` : "—— : —— : ——"}

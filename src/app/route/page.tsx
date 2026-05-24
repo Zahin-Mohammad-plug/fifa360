@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAppStore } from "@/store/appStore";
 import { MATCHES } from "@/data/matches";
 import { getVenuesForMatch } from "@/data/venues";
@@ -13,6 +13,25 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 
 type RouteMode = "metro" | "rideshare";
+
+type ResolvedRoute = {
+  durationMinutes: number;
+  distanceKm: number;
+  source: string;
+};
+
+/**
+ * Translate a real road-distance into a mode-aware total trip time.
+ *  - Rideshare uses OSRM's real driving time directly.
+ *  - Metro estimates with realistic NYC-style subway average (~28 km/h) +
+ *    a fixed 8-min first/last-mile walking buffer, which is closer to lived
+ *    transit experience than hardcoded plans.
+ */
+function deriveTotalMinutes(mode: RouteMode, route: ResolvedRoute): number {
+  if (mode === "rideshare") return route.durationMinutes;
+  const transitMinutes = Math.round((route.distanceKm / 28) * 60) + 8;
+  return Math.max(transitMinutes, 6);
+}
 
 const STEP_STYLES = {
   walk:   { bg: "rgba(245,158,11,0.1)",  border: "rgba(245,158,11,0.28)", color: "#fbbf24", label: "Footpath",    emoji: "🏃" },
@@ -33,8 +52,46 @@ export default function RoutePage() {
   const [secs,        setSecs]       = useState<number>(() => getDepartureSeconds(activeVenue));
   const [updating,    setUpdating]   = useState(false);
   const [showPicker,  setShowPicker] = useState(false);
+  const [resolvedRoute, setResolvedRoute] = useState<ResolvedRoute | null>(null);
 
-  const transitData = activeVenue ? TRANSIT_PLANS[activeVenue.id] ?? null : null;
+  const handleRouteResolved = useCallback((info: ResolvedRoute) => {
+    setResolvedRoute(info);
+  }, []);
+
+  // Clear stale resolved route when venue changes so we don't briefly show
+  // last venue's distance against the new venue.
+  useEffect(() => {
+    setResolvedRoute(null);
+  }, [activeVenue?.id]);
+
+  const realTotalMinutes = resolvedRoute ? deriveTotalMinutes(mode, resolvedRoute) : null;
+
+  const transitData = useMemo(() => {
+    if (!activeVenue) return null;
+    const base = TRANSIT_PLANS[activeVenue.id] ?? null;
+    if (!base || realTotalMinutes == null) return base;
+
+    // Rescale the existing step durations to match the real total, keeping
+    // the 0-min "arrive" marker as-is. This makes the per-step times reflect
+    // the real OSRM-derived travel time rather than hardcoded estimates.
+    const travelSteps = base.steps.filter((s) => s.duration > 0);
+    const hardcodedTotal = travelSteps.reduce((sum, s) => sum + s.duration, 0);
+    if (hardcodedTotal === 0) return base;
+
+    const scale = realTotalMinutes / hardcodedTotal;
+    let allocated = 0;
+    const rescaled = base.steps.map((step, i) => {
+      if (step.duration === 0) return step;
+      const isLastTravel = i === base.steps.findLastIndex((s) => s.duration > 0);
+      const minutes = isLastTravel
+        ? Math.max(1, realTotalMinutes - allocated)
+        : Math.max(1, Math.round(step.duration * scale));
+      allocated += minutes;
+      return { ...step, duration: minutes };
+    });
+
+    return { ...base, totalTime: realTotalMinutes, steps: rescaled };
+  }, [activeVenue, realTotalMinutes]);
 
   useEffect(() => {
     const id = setInterval(() => setSecs((p) => (p <= 1 ? 15 * 60 : p - 1)), 1000);
@@ -218,7 +275,11 @@ export default function RoutePage() {
             className="relative w-full rounded-3xl overflow-hidden"
             style={{ height: "min(62vh, 560px)", minHeight: 300, background: "#070d05", border: "1px solid rgba(255,255,255,0.05)" }}
           >
-            <ArrivalMap venue={activeVenue} transportMode={mode} />
+            <ArrivalMap
+              venue={activeVenue}
+              transportMode={mode}
+              onRouteResolved={handleRouteResolved}
+            />
 
             {/* Compass */}
             <div
@@ -285,7 +346,20 @@ export default function RoutePage() {
             <span className="label-mono">Arrival Plan</span>
             <div className="flex items-center gap-1.5 text-[11px] font-mono" style={{ color: "#ccff00" }}>
               <Train className="w-3.5 h-3.5" />
-              <span>{activeVenue?.routeTime ?? "—"}</span>
+              <span>
+                {realTotalMinutes != null
+                  ? `${realTotalMinutes} min${resolvedRoute ? ` · ${resolvedRoute.distanceKm} km` : ""}`
+                  : activeVenue?.routeTime ?? "—"}
+              </span>
+              {resolvedRoute?.source === "osrm" && (
+                <span
+                  className="ml-1 px-1.5 py-px rounded-md text-[8px] font-bold uppercase tracking-wider"
+                  style={{ background: "rgba(204,255,0,0.12)", color: "#ccff00" }}
+                  title="Real-time route from OpenStreetMap routing"
+                >
+                  Live
+                </span>
+              )}
             </div>
           </div>
 

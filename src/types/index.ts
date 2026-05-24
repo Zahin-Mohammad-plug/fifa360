@@ -129,3 +129,27 @@ export interface SharePlan {
   lat: number;
   lng: number;
 }
+
+/* ─── RSVP voice-call pipeline ─────────────────────────────────────────── */
+
+export type CallStatus =
+  | "idle"
+  | "initiating"
+  | "ringing"
+  | "in-progress"
+  | "completed"
+  | "failed";
+
+export interface TranscriptLine {
+  role: "agent" | "venue";
+  text: string;
+  timestamp: string;
+}
+
+export interface RsvpResult {
+  confirmed: boolean;
+  partySize: number;
+  arrivalTime: string;
+  confirmationRef?: string;
+  notes?: string;
+}

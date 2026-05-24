@@ -29,7 +29,7 @@ export function SharePageContent() {
           className="px-6 py-3.5 rounded-2xl font-black text-sm"
           style={{ background: "#ccff00", color: "#070c04" }}
         >
-          Open Matchday Concierge
+          Open FIFA 360
         </motion.button>
       </div>
     );
@@ -160,10 +160,10 @@ export function SharePageContent() {
           style={{ background: "#ccff00", color: "#070c04" }}
         >
           <ExternalLink className="w-4 h-4" />
-          Open in Matchday Concierge
+          Open in FIFA 360
         </motion.button>
         <p className="text-center text-[10px] font-mono" style={{ color: "rgba(249,251,248,0.18)" }}>
-          Matchday Concierge · FIFA World Cup 2026
+          FIFA 360 · FIFA World Cup 2026
         </p>
       </div>
     </div>
