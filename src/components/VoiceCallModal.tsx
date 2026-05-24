@@ -83,7 +83,7 @@ export function VoiceCallModal({
     if (initiatedForRef.current === venue.id) return;
     initiatedForRef.current = venue.id;
     confirmedFiredRef.current = null;
-    void initiate({ venueId: venue.id, matchId: match?.id, partySize });
+    void initiate({ venueId: venue.id, matchId: match?.id, partySize, venueName: venue.name });
   }, [open, venue, match?.id, partySize, initiate]);
 
   /* Fire the parent's confirmation callback exactly once per call. */

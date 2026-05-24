@@ -14,6 +14,7 @@ interface InitiateArgs {
   venueId: string;
   matchId?: string;
   partySize?: number;
+  venueName?: string;
 }
 
 interface UseVoiceCallReturn {
@@ -75,7 +76,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
   }, [cleanupAudio]);
 
   const initiate = useCallback(
-    async ({ venueId, matchId, partySize }: InitiateArgs) => {
+    async ({ venueId, matchId, partySize, venueName }: InitiateArgs) => {
       cancelledRef.current = false;
       setStatus("initiating");
       setTranscript([]);
@@ -167,7 +168,7 @@ export function useVoiceCall(): UseVoiceCallReturn {
         const res = await fetch("/api/voice/rsvp", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ ...result, venueId, matchId }),
+          body: JSON.stringify({ ...result, venueId, matchId, venueName }),
         });
         if (res.ok) {
           const data = await res.json();

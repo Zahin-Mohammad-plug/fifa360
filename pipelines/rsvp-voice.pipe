@@ -1,0 +1,194 @@
+{
+  "components": [
+    {
+      "id": "chat_1",
+      "provider": "chat",
+      "name": "Chat",
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "chat"
+      },
+      "ui": {
+        "position": {
+          "x": 20,
+          "y": 200
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
+    },
+    {
+      "id": "prompt_1",
+      "provider": "prompt",
+      "name": "Prompt",
+      "config": {
+        "instructions": [
+          "You are a departure timing assistant for FIFA 2026 World Cup fans. Given a route plan (travel mode, duration, kickoff time, venue name), write a departure briefing in 2-3 short sentences. Be specific, conversational, and practical. Include: when to leave, how to get there, and one tip for the journey. Keep it under 50 words total. Return ONLY the briefing text — no labels, no JSON."
+        ],
+        "name": "Departure Timing Prompt",
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 240,
+          "y": 190
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "chat_1"
+        }
+      ]
+    },
+    {
+      "id": "agent_rocketride_1",
+      "provider": "agent_rocketride",
+      "name": "Departure + SMS Agent",
+      "config": {
+        "instructions": [
+          "You are a departure timing assistant for FIFA 2026 World Cup fans. Your job is two steps:\n\n1. Generate a concise departure briefing (already prepared in your context) — keep it as-is, under 50 words.\n\n2. Send the briefing as an SMS via the Twilio Messages API using the http_request tool:\n   - Method: POST\n   - URL: https://api.twilio.com/2010-04-01/Accounts/${ROCKETRIDE_TWILIO_ACCOUNT_SID}/Messages.json\n   - Headers: { \"Content-Type\": \"application/x-www-form-urlencoded\" }\n   - Auth: HTTP Basic — username: ${ROCKETRIDE_TWILIO_ACCOUNT_SID}, password: ${ROCKETRIDE_TWILIO_AUTH_TOKEN}\n   - Body (form-encoded): From=${ROCKETRIDE_TWILIO_FROM}&To=${ROCKETRIDE_TWILIO_TO}&Body=<the briefing text>\n\nAfter sending the SMS, return the briefing text as your final answer."
+        ],
+        "max_waves": 3,
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 460,
+          "y": 200
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "questions",
+          "from": "prompt_1"
+        }
+      ]
+    },
+    {
+      "id": "response_answers_1",
+      "provider": "response_answers",
+      "name": "Response",
+      "config": {
+        "laneName": "answers"
+      },
+      "ui": {
+        "position": {
+          "x": 680,
+          "y": 200
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "llm_gmi_cloud_1",
+      "provider": "llm_gmi_cloud",
+      "name": "GMI Cloud",
+      "config": {
+        "profile": "custom",
+        "custom": {
+          "serverbase": "${ROCKETRIDE_GMI_BASE_URL}",
+          "model": "${ROCKETRIDE_GMI_FAST_MODEL}",
+          "modelTotalTokens": 4096,
+          "apikey": "${ROCKETRIDE_GMI_API_KEY}"
+        },
+        "parameters": {}
+      },
+      "ui": {
+        "position": {
+          "x": 350,
+          "y": 360
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "llm",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "memory_internal_1",
+      "provider": "memory_internal",
+      "name": "Memory",
+      "config": {
+        "type": "memory_internal"
+      },
+      "ui": {
+        "position": {
+          "x": 520,
+          "y": 360
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "memory",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    },
+    {
+      "id": "tool_http_request_1",
+      "provider": "tool_http_request",
+      "name": "Twilio SMS",
+      "config": {
+        "type": "tool_http_request",
+        "allowGET": false,
+        "allowPOST": true,
+        "allowPUT": false,
+        "allowPATCH": false,
+        "allowDELETE": false,
+        "allowHEAD": false,
+        "allowOPTIONS": false,
+        "urlWhitelist": [
+          {
+            "whitelistPattern": "^https://api\\.twilio\\.com/.*"
+          }
+        ],
+        "rateLimitPerSecond": 5,
+        "rateLimitPerMinute": 30,
+        "maxConcurrentRequests": 2
+      },
+      "ui": {
+        "position": {
+          "x": 690,
+          "y": 360
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      },
+      "control": [
+        {
+          "classType": "tool",
+          "from": "agent_rocketride_1"
+        }
+      ]
+    }
+  ],
+  "project_id": "bcfe7f9c-07da-425c-8f08-8e79788cce75",
+  "version": 1,
+  "isLocked": false,
+  "snapToGrid": true,
+  "snapGridSize": [
+    10,
+    10
+  ],
+  "docRevision": 9
+}

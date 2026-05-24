@@ -3,21 +3,53 @@
     {
       "id": "chat_1",
       "provider": "chat",
-      "config": { "hideForm": true, "mode": "Source", "parameters": {}, "type": "chat" },
-      "ui": { "position": { "x": 20, "y": 200 }, "measured": { "width": 150, "height": 66 }, "nodeType": "default", "formDataValid": true }
+      "config": {
+        "hideForm": true,
+        "mode": "Source",
+        "parameters": {},
+        "type": "chat"
+      },
+      "ui": {
+        "position": {
+          "x": 20,
+          "y": 200
+        },
+        "measured": {
+          "width": 150,
+          "height": 66
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
     },
     {
       "id": "prompt_1",
       "provider": "prompt",
       "config": {
         "instructions": [
-          "You are a live football match commentator for FIFA 2026 World Cup. Given a match event (type, player, team, minute, score), write a vivid 1-2 sentence description for casual fans. Be exciting, specific, and brief. Use the player name and team. Return ONLY the description — no labels, no JSON, no extra text."
+          "You are a FIFA 2026 World Cup live match AI assistant helping casual fans understand what's happening. Given a request about a match event, do exactly what is asked:\n\n- If the request starts with 'SUGGEST_QUESTIONS:' — return ONLY a JSON array of exactly 2 short questions a casual fan might want to ask about that event (each under 10 words). Example format: [\"Who is De Paul?\", \"What happens after a yellow card?\"]. No markdown, no labels, no explanation.\n\n- If the request starts with 'ANSWER:' — answer the specific question clearly and concisely in 1-2 sentences for a casual fan. Return ONLY the answer text.\n\n- Otherwise — write a vivid, exciting 1-2 sentence description of the event for casual fans. Be specific about the player and team. Return ONLY the description text."
         ],
-        "name": "Live Event Explanation Prompt",
+        "name": "Live Event AI Prompt",
         "parameters": {}
       },
-      "input": [{ "lane": "questions", "from": "chat_1" }],
-      "ui": { "position": { "x": 240, "y": 200 }, "measured": { "width": 150, "height": 66 }, "nodeType": "default", "formDataValid": true }
+      "input": [
+        {
+          "lane": "questions",
+          "from": "chat_1"
+        }
+      ],
+      "ui": {
+        "position": {
+          "x": 240,
+          "y": 200
+        },
+        "measured": {
+          "width": 150,
+          "height": 66
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
     },
     {
       "id": "llm_gmi_cloud_1",
@@ -32,18 +64,56 @@
         },
         "parameters": {}
       },
-      "input": [{ "lane": "questions", "from": "prompt_1" }],
-      "ui": { "position": { "x": 460, "y": 200 }, "measured": { "width": 150, "height": 66 }, "nodeType": "default", "formDataValid": true }
+      "input": [
+        {
+          "lane": "questions",
+          "from": "prompt_1"
+        }
+      ],
+      "ui": {
+        "position": {
+          "x": 460,
+          "y": 200
+        },
+        "measured": {
+          "width": 150,
+          "height": 66
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
     },
     {
       "id": "response_answers_1",
       "provider": "response_answers",
-      "config": { "laneName": "answers" },
-      "input": [{ "lane": "answers", "from": "llm_gmi_cloud_1" }],
-      "ui": { "position": { "x": 680, "y": 200 }, "measured": { "width": 150, "height": 66 }, "nodeType": "default", "formDataValid": true }
+      "config": {
+        "laneName": "answers"
+      },
+      "input": [
+        {
+          "lane": "answers",
+          "from": "llm_gmi_cloud_1"
+        }
+      ],
+      "ui": {
+        "position": {
+          "x": 680,
+          "y": 200
+        },
+        "measured": {
+          "width": 150,
+          "height": 66
+        },
+        "nodeType": "default",
+        "formDataValid": true
+      }
     }
   ],
-  "project_id": "3da96ea7-d6e5-44a2-ba65-2f32a4ff8825",
-  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "project_id": "5d52697c-b815-4be3-a71d-778730a66ace",
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
   "version": 1
 }

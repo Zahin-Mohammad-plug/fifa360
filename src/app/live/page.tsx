@@ -6,16 +6,17 @@ import { MATCHES, getNextMatch } from "@/data/matches";
 import { Match, MatchEvent } from "@/types";
 import {
   Radio, Trophy, Calendar, Sparkles, Plus, Play, Pause, RefreshCw,
-  AlertTriangle, AlertCircle, ChevronRight, Bell, BellRing, ArrowRight,
+  AlertTriangle, AlertCircle, ChevronRight, ArrowRight,
+  Loader2, Send, MessageSquare,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const SIMULATED_EVENTS: Omit<MatchEvent, "minute">[] = [
-  { type: "goal",   team: "Mexico",    player: "H. Lozano",       summary: "GOLAZO! Lozano equalizes with a flying header. It's level again!" },
-  { type: "yellow", team: "Argentina", player: "L. Messi",        summary: "Messi booked for dissent after disputing a throw-in call. Rare card." },
-  { type: "red",    team: "Mexico",    player: "J. Corona",       summary: "RED CARD! Corona receives a second yellow for a reckless foul. Mexico down to 10!" },
-  { type: "goal",   team: "Argentina", player: "L. Messi",        summary: "MESSI MAGIC! He curls a free-kick into the top corner. Argentina lead!" },
-  { type: "sub",    team: "Argentina", player: "Di María → Mac Allister", summary: "Mac Allister on for Di María as Scaloni looks to protect the lead." },
+  { type: "goal",   team: "Mexico",    player: "H. Lozano",                 summary: "GOLAZO! Lozano equalizes with a flying header. It's level again!" },
+  { type: "yellow", team: "Argentina", player: "R. De Paul",                summary: "De Paul booked for a crunching late tackle in the midfield." },
+  { type: "red",    team: "Mexico",    player: "J. Corona",                  summary: "RED CARD! Corona receives a second yellow for a reckless foul. Mexico down to 10!" },
+  { type: "goal",   team: "Argentina", player: "L. Messi",                   summary: "MESSI MAGIC! He curls a free-kick into the top corner. Argentina lead!" },
+  { type: "sub",    team: "Argentina", player: "Di María → Mac Allister",    summary: "Mac Allister on for Di María as Scaloni looks to protect the lead." },
 ];
 
 const EVENT_STYLES: Record<string, { border: string; bg: string; dot: string; icon: string; label: string }> = {
@@ -33,6 +34,252 @@ function getEventStyle(type: string) {
   return EVENT_STYLES[type] ?? EVENT_STYLES.kickoff;
 }
 
+/* ── AI panel state per event ─────────────────────────────────────────────── */
+interface EventAiState {
+  questions: string[] | null;   // null = not yet loaded
+  loadingQs: boolean;
+  selectedQ: string | null;
+  customQ: string;
+  answer: string | null;
+  loadingAnswer: boolean;
+}
+
+function emptyAiState(): EventAiState {
+  return { questions: null, loadingQs: false, selectedQ: null, customQ: "", answer: null, loadingAnswer: false };
+}
+
+function buildEventKey(evt: MatchEvent, idx: number) {
+  return `${evt.minute}-${evt.type}-${idx}`;
+}
+
+/* ── EventCard ────────────────────────────────────────────────────────────── */
+function EventCard({
+  evt,
+  idx,
+  isExpanded,
+  onToggle,
+}: {
+  evt: MatchEvent;
+  idx: number;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const s = getEventStyle(evt.type);
+  const [ai, setAi] = useState<EventAiState>(emptyAiState);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch suggested questions when the card expands for the first time
+  useEffect(() => {
+    if (!isExpanded) return;
+    if (ai.questions !== null || ai.loadingQs) return;
+
+    setAi((p) => ({ ...p, loadingQs: true }));
+    fetch("/api/rocketride/live-explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode: "questions", event: evt }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setAi((p) => ({
+          ...p,
+          loadingQs: false,
+          questions: Array.isArray(data.questions) ? data.questions : [],
+        }));
+      })
+      .catch(() => setAi((p) => ({ ...p, loadingQs: false, questions: [] })));
+  }, [isExpanded, evt, ai.questions, ai.loadingQs]);
+
+  const askQuestion = useCallback(
+    (q: string) => {
+      if (!q.trim()) return;
+      setAi((p) => ({ ...p, selectedQ: q, answer: null, loadingAnswer: true }));
+      fetch("/api/rocketride/live-explain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "answer", event: evt, question: q }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          setAi((p) => ({ ...p, loadingAnswer: false, answer: data.answer ?? "" }));
+        })
+        .catch(() => setAi((p) => ({ ...p, loadingAnswer: false, answer: "Couldn't reach the AI — try again." })));
+    },
+    [evt]
+  );
+
+  return (
+    <motion.div
+      key={buildEventKey(evt, idx)}
+      initial={{ opacity: 0, x: -12, scale: 0.96 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1], delay: idx < 3 ? idx * 0.04 : 0 }}
+      className="relative group"
+    >
+      {/* Minute node */}
+      <div
+        className="absolute -left-[33px] top-0 w-7 h-7 rounded-full flex items-center justify-center font-mono text-[9px] font-bold border-2"
+        style={{ background: "#060b03", borderColor: s.dot, color: s.dot }}
+      >
+        {evt.minute}
+      </div>
+
+      {/* Event card */}
+      <div
+        className="rounded-xl overflow-hidden"
+        style={{ background: s.bg, border: `1px solid ${s.border}`, boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)" }}
+      >
+        {/* Header row — clickable to toggle */}
+        <button
+          className="w-full text-left p-3.5 transition-transform group-hover:translate-x-0.5"
+          onClick={onToggle}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-sm">{s.icon}</span>
+            <span className="chip" style={{ background: `${s.dot}18`, color: s.dot, border: `1px solid ${s.dot}33`, fontSize: "8px" }}>
+              {s.label}
+            </span>
+            {evt.type === "yellow" && <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#fbbf24" }} />}
+            {evt.type === "red"    && <AlertCircle   className="w-3.5 h-3.5" style={{ color: "#ff3b30" }} />}
+            <span className="ml-auto">
+              <MessageSquare className="w-3.5 h-3.5 opacity-40" style={{ color: "#ccff00" }} />
+            </span>
+          </div>
+          <p className="text-xs font-semibold" style={{ color: "#f5f9f3" }}>
+            {evt.player ?? (evt.type.charAt(0).toUpperCase() + evt.type.slice(1))}
+            {evt.team && (
+              <span className="ml-1.5 font-normal text-[10px]" style={{ color: "#7a8a75" }}>
+                ({evt.team})
+              </span>
+            )}
+          </p>
+          <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "#9aaa93" }}>
+            {evt.summary}
+          </p>
+        </button>
+
+        {/* AI panel */}
+        <AnimatePresence>
+          {isExpanded && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className="overflow-hidden"
+            >
+              <div
+                className="px-3.5 pb-3.5 pt-2 space-y-3"
+                style={{ borderTop: `1px solid ${s.border}` }}
+              >
+                {/* Label */}
+                <div className="flex items-center gap-1.5">
+                  <Sparkles className="w-3 h-3" style={{ color: "#ccff00" }} />
+                  <span className="text-[9px] font-mono font-bold uppercase" style={{ color: "#ccff00", letterSpacing: "0.14em" }}>
+                    Ask AI
+                  </span>
+                </div>
+
+                {/* Suggested questions */}
+                {ai.loadingQs ? (
+                  <div className="flex items-center gap-2 text-[11px]" style={{ color: "#7a8a75" }}>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "#ccff00" }} />
+                    Generating questions…
+                  </div>
+                ) : ai.questions && ai.questions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {ai.questions.map((q, qi) => (
+                      <button
+                        key={qi}
+                        onClick={() => askQuestion(q)}
+                        className="px-3 py-1.5 rounded-full text-[10.5px] font-medium transition-all cursor-pointer select-none"
+                        style={{
+                          background: ai.selectedQ === q ? "rgba(204,255,0,0.18)" : "rgba(204,255,0,0.06)",
+                          border: ai.selectedQ === q ? "1px solid rgba(204,255,0,0.5)" : "1px solid rgba(204,255,0,0.2)",
+                          color: "#ccff00",
+                        }}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+
+                {/* Custom question input */}
+                <div className="flex gap-2">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={ai.customQ}
+                    onChange={(e) => setAi((p) => ({ ...p, customQ: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === "Enter") askQuestion(ai.customQ); }}
+                    placeholder="Ask your own question…"
+                    className="flex-1 px-3 py-1.5 rounded-lg text-[11px] outline-none"
+                    style={{
+                      background: "rgba(5,9,3,0.8)",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      color: "#f5f9f3",
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = "rgba(204,255,0,0.35)")}
+                    onBlur={(e)  => (e.target.style.borderColor = "rgba(255,255,255,0.08)")}
+                  />
+                  <button
+                    onClick={() => askQuestion(ai.customQ)}
+                    disabled={!ai.customQ.trim()}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg flex-shrink-0 transition-all"
+                    style={{
+                      background: ai.customQ.trim() ? "rgba(204,255,0,0.18)" : "rgba(255,255,255,0.04)",
+                      border: ai.customQ.trim() ? "1px solid rgba(204,255,0,0.4)" : "1px solid rgba(255,255,255,0.07)",
+                      color: ai.customQ.trim() ? "#ccff00" : "#7a8a75",
+                    }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Answer */}
+                <AnimatePresence>
+                  {(ai.loadingAnswer || ai.answer) && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0 }}
+                      className="rounded-xl px-3.5 py-3"
+                      style={{
+                        background: "rgba(5,9,3,0.75)",
+                        border: "1px solid rgba(204,255,0,0.16)",
+                      }}
+                    >
+                      {ai.loadingAnswer ? (
+                        <div className="flex items-center gap-2 text-[11px]" style={{ color: "#7a8a75" }}>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: "#ccff00" }} />
+                          Thinking…
+                        </div>
+                      ) : (
+                        <>
+                          {ai.selectedQ && (
+                            <p className="text-[9.5px] font-mono mb-1.5" style={{ color: "#ccff00", opacity: 0.8 }}>
+                              Q: {ai.selectedQ}
+                            </p>
+                          )}
+                          <p className="text-[12px] leading-relaxed" style={{ color: "#d8e8d4" }}>
+                            {ai.answer}
+                          </p>
+                        </>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </motion.div>
+  );
+}
+
+/* ── Main page ────────────────────────────────────────────────────────────── */
 export default function LivePage() {
   const { selectedMatch, setSelectedMatch } = useAppStore();
 
@@ -40,9 +287,9 @@ export default function LivePage() {
     selectedMatch ?? MATCHES.find((m) => m.status === "live") ?? MATCHES[0]
   );
   const [timeline, setTimeline] = useState<MatchEvent[]>([...(activeMatch.events ?? [])].reverse());
-  const [simMin,     setSimMin]     = useState<number>(parseInt(activeMatch.minute ?? "74") || 0);
-  const [playing,    setPlaying]    = useState(true);
-  const [pushOptIn,  setPushOptIn]  = useState(false);
+  const [simMin,    setSimMin]   = useState<number>(parseInt(activeMatch.minute ?? "74") || 0);
+  const [playing,   setPlaying]  = useState(true);
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const simRef = useRef<NodeJS.Timeout | null>(null);
 
   const isLive    = activeMatch.status === "live";
@@ -74,13 +321,17 @@ export default function LivePage() {
     const min    = Math.min(simMin + Math.floor(Math.random() * 3) + 1, 90);
     setSimMin(min);
     const random = SIMULATED_EVENTS[Math.floor(Math.random() * SIMULATED_EVENTS.length)];
-    setTimeline((prev) => [{ ...random, minute: String(min) }, ...prev]);
+    const newEvt = { ...random, minute: String(min) };
+    setTimeline((prev) => [newEvt, ...prev]);
+    // Auto-expand the newest event so the AI panel is visible immediately
+    setExpandedKey(buildEventKey(newEvt, 0));
   }, [simMin]);
 
   const reset = useCallback(() => {
     setSimMin(74);
     setTimeline([...(activeMatch.events ?? [])].reverse());
     setPlaying(true);
+    setExpandedKey(null);
   }, [activeMatch]);
 
   const handleMatchSelect = useCallback((m: Match) => {
@@ -89,9 +340,9 @@ export default function LivePage() {
     setTimeline([...(m.events ?? [])].reverse());
     setSimMin(parseInt(m.minute ?? "0") || 0);
     setPlaying(m.status === "live");
+    setExpandedKey(null);
   }, [setSelectedMatch]);
 
-  // Progress bar (0-90)
   const progressPct = Math.min(100, Math.round((simMin / 90) * 100));
 
   return (
@@ -110,7 +361,6 @@ export default function LivePage() {
             boxShadow: isLive ? "0 0 60px rgba(255,59,48,0.05)" : "0 20px 40px rgba(0,0,0,0.3)",
           }}
         >
-          {/* Inner glass highlight */}
           <div
             className="absolute top-0 left-0 right-0 h-px"
             style={{ background: `linear-gradient(90deg, ${activeMatch.homeColor}44, rgba(255,255,255,0.06) 50%, ${activeMatch.awayColor}44)` }}
@@ -120,11 +370,7 @@ export default function LivePage() {
           <div className="flex items-center justify-between mb-5">
             <span
               className="flex items-center gap-1.5 text-[10px] font-mono font-medium px-2.5 py-1 rounded-lg"
-              style={{
-                background: "rgba(255,255,255,0.05)",
-                border: "1px solid rgba(255,255,255,0.07)",
-                color: "#b0bfac",
-              }}
+              style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#b0bfac" }}
             >
               <Trophy className="w-3.5 h-3.5" style={{ color: "#ccff00" }} />
               {activeMatch.league} · {activeMatch.tournament.replace("FIFA ", "")}
@@ -133,11 +379,7 @@ export default function LivePage() {
             {isLive ? (
               <span
                 className="neon-pulse-live flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-mono font-bold uppercase"
-                style={{
-                  background: "rgba(255,59,48,0.16)",
-                  border: "1px solid rgba(255,59,48,0.32)",
-                  color: "#ff5e54",
-                }}
+                style={{ background: "rgba(255,59,48,0.16)", border: "1px solid rgba(255,59,48,0.32)", color: "#ff5e54" }}
               >
                 <Radio className="w-3.5 h-3.5 animate-live-dot" /> Live
               </span>
@@ -150,70 +392,37 @@ export default function LivePage() {
 
           {/* Score row */}
           <div className="flex items-center justify-between">
-            {/* Home */}
             <div className="flex-1 flex flex-col items-center gap-2">
               <div
                 className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
-                style={{
-                  background: `${activeMatch.homeColor}22`,
-                  border: `1.5px solid ${activeMatch.homeColor}55`,
-                  boxShadow: `0 0 18px ${activeMatch.homeColor}22`,
-                }}
+                style={{ background: `${activeMatch.homeColor}22`, border: `1.5px solid ${activeMatch.homeColor}55`, boxShadow: `0 0 18px ${activeMatch.homeColor}22` }}
               >
                 {activeMatch.homeFlag}
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-bold tracking-tight" style={{ color: "#f5f9f3" }}>
-                  {activeMatch.homeTeam}
-                </p>
+                <p className="text-[13px] font-bold tracking-tight" style={{ color: "#f5f9f3" }}>{activeMatch.homeTeam}</p>
                 <p className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>Home</p>
               </div>
             </div>
 
-            {/* Score */}
             <div className="px-2 flex flex-col items-center gap-2">
               {activeMatch.status !== "upcoming" ? (
                 <>
                   <div className="flex items-center gap-2">
-                    <motion.span
-                      key={activeMatch.scoreHome}
-                      initial={{ scale: 1.4, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="text-[52px] font-mono font-extrabold leading-none"
-                      style={{
-                        color: "#f5f9f3",
-                        textShadow: isLive ? `0 0 24px ${activeMatch.homeColor}44` : "none",
-                      }}
-                    >
+                    <motion.span key={activeMatch.scoreHome} initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      className="text-[52px] font-mono font-extrabold leading-none" style={{ color: "#f5f9f3", textShadow: isLive ? `0 0 24px ${activeMatch.homeColor}44` : "none" }}>
                       {activeMatch.scoreHome}
                     </motion.span>
-                    <span
-                      className="text-2xl font-mono font-bold gradient-text-neon"
-                    >
-                      :
-                    </span>
-                    <motion.span
-                      key={activeMatch.scoreAway}
-                      initial={{ scale: 1.4, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="text-[52px] font-mono font-extrabold leading-none"
-                      style={{
-                        color: "#f5f9f3",
-                        textShadow: isLive ? `0 0 24px ${activeMatch.awayColor}44` : "none",
-                      }}
-                    >
+                    <span className="text-2xl font-mono font-bold gradient-text-neon">:</span>
+                    <motion.span key={activeMatch.scoreAway} initial={{ scale: 1.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                      className="text-[52px] font-mono font-extrabold leading-none" style={{ color: "#f5f9f3", textShadow: isLive ? `0 0 24px ${activeMatch.awayColor}44` : "none" }}>
                       {activeMatch.scoreAway}
                     </motion.span>
                   </div>
                   {isLive && (
                     <div
                       className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-mono font-bold"
-                      style={{
-                        background: "rgba(5,9,3,0.9)",
-                        border: "1px solid rgba(204,255,0,0.28)",
-                        color: "#ccff00",
-                        boxShadow: "0 0 10px rgba(204,255,0,0.12)",
-                      }}
+                      style={{ background: "rgba(5,9,3,0.9)", border: "1px solid rgba(204,255,0,0.28)", color: "#ccff00", boxShadow: "0 0 10px rgba(204,255,0,0.12)" }}
                     >
                       <span className="w-2 h-2 rounded-full animate-ping" style={{ background: "#ccff00" }} />
                       {simMin}′
@@ -222,14 +431,7 @@ export default function LivePage() {
                 </>
               ) : (
                 <div className="text-center space-y-1.5">
-                  <div
-                    className="px-5 py-2.5 rounded-xl text-sm font-mono font-bold"
-                    style={{
-                      background: "rgba(5,9,3,0.8)",
-                      border: "1px solid rgba(255,255,255,0.07)",
-                      color: "#f5f9f3",
-                    }}
-                  >
+                  <div className="px-5 py-2.5 rounded-xl text-sm font-mono font-bold" style={{ background: "rgba(5,9,3,0.8)", border: "1px solid rgba(255,255,255,0.07)", color: "#f5f9f3" }}>
                     {activeMatch.time}
                   </div>
                   <p className="text-[10px] font-mono" style={{ color: "#f59e0b" }}>Pre-match</p>
@@ -237,41 +439,26 @@ export default function LivePage() {
               )}
             </div>
 
-            {/* Away */}
             <div className="flex-1 flex flex-col items-center gap-2">
               <div
                 className="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl"
-                style={{
-                  background: `${activeMatch.awayColor}22`,
-                  border: `1.5px solid ${activeMatch.awayColor}55`,
-                  boxShadow: `0 0 18px ${activeMatch.awayColor}22`,
-                }}
+                style={{ background: `${activeMatch.awayColor}22`, border: `1.5px solid ${activeMatch.awayColor}55`, boxShadow: `0 0 18px ${activeMatch.awayColor}22` }}
               >
                 {activeMatch.awayFlag}
               </div>
               <div className="text-center">
-                <p className="text-[13px] font-bold tracking-tight" style={{ color: "#f5f9f3" }}>
-                  {activeMatch.awayTeam}
-                </p>
+                <p className="text-[13px] font-bold tracking-tight" style={{ color: "#f5f9f3" }}>{activeMatch.awayTeam}</p>
                 <p className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>Away</p>
               </div>
             </div>
           </div>
 
-          {/* Progress bar (live only) */}
           {isLive && (
             <div className="mt-5">
-              <div
-                className="w-full h-1 rounded-full overflow-hidden"
-                style={{ background: "rgba(255,255,255,0.07)" }}
-              >
+              <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.07)" }}>
                 <div
                   className="h-full rounded-full transition-all duration-1000"
-                  style={{
-                    width: `${progressPct}%`,
-                    background: "linear-gradient(90deg, #ccff00, #a3e800)",
-                    boxShadow: "0 0 8px rgba(204,255,0,0.5)",
-                  }}
+                  style={{ width: `${progressPct}%`, background: "linear-gradient(90deg, #ccff00, #a3e800)", boxShadow: "0 0 8px rgba(204,255,0,0.5)" }}
                 />
               </div>
               <div className="flex justify-between mt-1 text-[8.5px] font-mono" style={{ color: "rgba(255,255,255,0.2)" }}>
@@ -280,7 +467,6 @@ export default function LivePage() {
             </div>
           )}
 
-          {/* Venue */}
           <div
             className="mt-4 pt-3 text-center text-[11px] font-mono"
             style={{ borderTop: "1px solid rgba(255,255,255,0.055)", color: "#7a8a75" }}
@@ -302,7 +488,7 @@ export default function LivePage() {
                 <Sparkles className="w-3 h-3" style={{ color: "#ccff00" }} />
                 Interactive Demo
               </span>
-              <span className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>5 s = 1 match minute</span>
+              <span className="text-[9.5px] font-mono" style={{ color: "#7a8a75" }}>Tap an event to ask AI</span>
             </div>
             <div className="flex gap-2">
               <button
@@ -313,18 +499,12 @@ export default function LivePage() {
                   : { background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", color: "#b0bfac" }
                 }
               >
-                {playing
-                  ? <><Pause  className="w-3.5 h-3.5 fill-current" /> Pause</>
-                  : <><Play   className="w-3.5 h-3.5 fill-current" /> Resume</>}
+                {playing ? <><Pause className="w-3.5 h-3.5 fill-current" /> Pause</> : <><Play className="w-3.5 h-3.5 fill-current" /> Resume</>}
               </button>
               <button
                 onClick={triggerEvent}
                 className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-extrabold transition-all cursor-pointer"
-                style={{
-                  background: "#ccff00",
-                  color: "#060b03",
-                  boxShadow: "0 3px 12px rgba(204,255,0,0.25)",
-                }}
+                style={{ background: "#ccff00", color: "#060b03", boxShadow: "0 3px 12px rgba(204,255,0,0.25)" }}
               >
                 <Plus className="w-4 h-4" /> Trigger Event
               </button>
@@ -344,11 +524,13 @@ export default function LivePage() {
         <div>
           <div className="flex items-center gap-2 mb-4">
             <span className="label-mono">Match Timeline</span>
+            <span className="chip chip-sage" style={{ fontSize: "8.5px" }}>{timeline.length} events</span>
             <span
-              className="chip chip-sage"
-              style={{ fontSize: "8.5px" }}
+              className="ml-auto text-[9px] font-mono flex items-center gap-1"
+              style={{ color: "#7a8a75" }}
             >
-              {timeline.length} events
+              <MessageSquare className="w-3 h-3" style={{ color: "#ccff00" }} />
+              Tap event → Ask AI
             </span>
           </div>
 
@@ -357,10 +539,7 @@ export default function LivePage() {
               className="rounded-2xl py-10 px-6 text-center"
               style={{ background: "rgba(10,18,8,0.5)", border: "1px dashed rgba(255,255,255,0.1)" }}
             >
-              <div
-                className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                style={{ background: "rgba(204,255,0,0.08)", border: "1px solid rgba(204,255,0,0.2)" }}
-              >
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4" style={{ background: "rgba(204,255,0,0.08)", border: "1px solid rgba(204,255,0,0.2)" }}>
                 <Calendar className="w-6 h-6" style={{ color: "#ccff00" }} />
               </div>
               <h4 className="text-xs font-bold uppercase mb-1" style={{ color: "#f5f9f3" }}>Timeline Not Active</h4>
@@ -372,53 +551,15 @@ export default function LivePage() {
             <div className="relative border-l ml-4 pl-5 space-y-3 pt-1" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
               <AnimatePresence initial={false}>
                 {timeline.map((evt, idx) => {
-                  const s = getEventStyle(evt.type);
+                  const key = buildEventKey(evt, idx);
                   return (
-                    <motion.div
-                      key={`${evt.minute}-${idx}`}
-                      initial={{ opacity: 0, x: -12, scale: 0.96 }}
-                      animate={{ opacity: 1, x: 0, scale: 1 }}
-                      transition={{ duration: 0.28, ease: [0.22,1,0.36,1], delay: idx < 3 ? idx * 0.04 : 0 }}
-                      className="relative group"
-                    >
-                      {/* Minute node */}
-                      <div
-                        className="absolute -left-[33px] top-0 w-7 h-7 rounded-full flex items-center justify-center font-mono text-[9px] font-bold border-2"
-                        style={{ background: "#060b03", borderColor: s.dot, color: s.dot }}
-                      >
-                        {evt.minute}
-                      </div>
-
-                      {/* Event card */}
-                      <div
-                        className="rounded-xl p-3.5 transition-transform group-hover:translate-x-0.5"
-                        style={{
-                          background: s.bg,
-                          border: `1px solid ${s.border}`,
-                          boxShadow: `inset 0 1px 0 rgba(255,255,255,0.03)`,
-                        }}
-                      >
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm">{s.icon}</span>
-                          <span className="chip" style={{ background: `${s.dot}18`, color: s.dot, border: `1px solid ${s.dot}33`, fontSize: "8px" }}>
-                            {s.label}
-                          </span>
-                          {evt.type === "yellow" && <AlertTriangle className="w-3.5 h-3.5" style={{ color: "#fbbf24" }} />}
-                          {evt.type === "red"    && <AlertCircle   className="w-3.5 h-3.5" style={{ color: "#ff3b30" }} />}
-                        </div>
-                        <p className="text-xs font-semibold" style={{ color: "#f5f9f3" }}>
-                          {evt.player ?? (evt.type.charAt(0).toUpperCase() + evt.type.slice(1))}
-                          {evt.team && (
-                            <span className="ml-1.5 font-normal text-[10px]" style={{ color: "#7a8a75" }}>
-                              ({evt.team})
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-[11px] mt-1 leading-relaxed" style={{ color: "#9aaa93" }}>
-                          {evt.summary}
-                        </p>
-                      </div>
-                    </motion.div>
+                    <EventCard
+                      key={key}
+                      evt={evt}
+                      idx={idx}
+                      isExpanded={expandedKey === key}
+                      onToggle={() => setExpandedKey((prev) => (prev === key ? null : key))}
+                    />
                   );
                 })}
               </AnimatePresence>
@@ -428,9 +569,7 @@ export default function LivePage() {
 
         {/* ══ Other Fixtures ══ */}
         <div className="pt-1">
-          <div className="label-mono flex items-center gap-1.5 mb-3">
-            🗓 Other Fixtures
-          </div>
+          <div className="label-mono flex items-center gap-1.5 mb-3">🗓 Other Fixtures</div>
           <div className="space-y-2">
             {MATCHES.filter((m) => m.id !== activeMatch.id).map((match) => (
               <motion.button
@@ -438,10 +577,7 @@ export default function LivePage() {
                 whileTap={{ scale: 0.985 }}
                 onClick={() => handleMatchSelect(match)}
                 className="w-full text-left rounded-2xl p-3.5 flex items-center justify-between transition-all cursor-pointer group"
-                style={{
-                  background: "rgba(10,18,8,0.55)",
-                  border: "1px solid rgba(255,255,255,0.055)",
-                }}
+                style={{ background: "rgba(10,18,8,0.55)", border: "1px solid rgba(255,255,255,0.055)" }}
               >
                 <div className="flex-1 min-w-0">
                   <span className="label-mono">{match.league}</span>
@@ -455,10 +591,8 @@ export default function LivePage() {
                 </div>
                 <div className="flex items-center gap-2">
                   {match.status === "finished" ? (
-                    <span
-                      className="text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg flex-shrink-0"
-                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#9aaa93" }}
-                    >
+                    <span className="text-[11px] font-mono font-bold px-2.5 py-1.5 rounded-lg flex-shrink-0"
+                      style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.07)", color: "#9aaa93" }}>
                       {match.scoreHome}–{match.scoreAway}
                     </span>
                   ) : match.status === "live" ? (
