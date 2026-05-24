@@ -290,6 +290,7 @@ export default function RoutePage() {
                 border: "1px solid rgba(255,255,255,0.07)",
                 color: "#7a8a75",
                 backdropFilter: "blur(6px)",
+                zIndex: 1000,
               }}
             >
               N 🧭
@@ -304,6 +305,7 @@ export default function RoutePage() {
                   border: "1px solid rgba(204,255,0,0.28)",
                   backdropFilter: "blur(10px)",
                   boxShadow: "0 0 14px rgba(204,255,0,0.1)",
+                  zIndex: 1000,
                 }}
               >
                 <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -322,6 +324,7 @@ export default function RoutePage() {
                 background: "rgba(5,9,3,0.92)",
                 border: "1px solid rgba(255,255,255,0.07)",
                 backdropFilter: "blur(10px)",
+                zIndex: 1000,
               }}
             >
               {(["metro", "rideshare"] as RouteMode[]).map((m) => (
